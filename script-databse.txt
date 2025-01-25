@@ -1,0 +1,41 @@
+CREATE TABLE expedientes (
+    id INT AUTO_INCREMENT PRIMARY KEY,   
+    numero VARCHAR(50) NOT NULL UNIQUE,        
+    materia VARCHAR(100) DEFAULT NULL,        
+    juzgado VARCHAR(100) DEFAULT NULL,      
+    especialista VARCHAR(100) DEFAULT NULL,   
+    tercero VARCHAR(100) DEFAULT NULL,        
+    demandado VARCHAR(100) DEFAULT NULL,       
+    demandante VARCHAR(100) DEFAULT NULL,      
+    estado_actual VARCHAR(10000)   
+);
+CREATE TABLE historico_estados (
+    id INT AUTO_INCREMENT PRIMARY KEY,         
+    expediente_id INT NOT NULL,                
+    estado VARCHAR(10000) NOT NULL,              
+    numero_estado INT NOT NULL,
+    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
+    FOREIGN KEY (expediente_id) REFERENCES expedientes(id)  
+);
+CREATE TABLE archivos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    expediente_numero VARCHAR(50) NOT NULL,
+    nombre_archivo VARCHAR(300) NOT NULL,
+    tipo_archivo ENUM('WORD', 'PDF') NOT NULL,
+    FOREIGN KEY (expediente_numero) REFERENCES expedientes(numero)
+);
+CREATE TABLE roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL UNIQUE
+);
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    rol_id INT NOT NULL,
+    FOREIGN KEY (rol_id) REFERENCES roles(id)
+);
+
+
+DROP TABLE IF EXISTS archivos, historico_estados, expedientes,usuarios,roles;
