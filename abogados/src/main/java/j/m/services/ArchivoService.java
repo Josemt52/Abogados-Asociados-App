@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.jsoup.Jsoup;
 
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfReader;
@@ -37,13 +38,17 @@ public class ArchivoService {
     public void crearArchivo(String numeroExpediente, String tipoArchivo, String nombreArchivo,
                          String numero, String materia, String juzgado, String especialista,
                          String tercero, String demandado, String demandante, String estadoActual) throws IOException {
+
+    // Convertimos el HTML del estadoActual a texto con formato básico
+    String estadoLimpio = convertirHtmlATexto(estadoActual);
+
     String rutaArchivo;
     if (tipoArchivo.equals("WORD")) {
         rutaArchivo = Paths.get(WORD_FOLDER, nombreArchivo + ".docx").toString();
-        WordDocumentService.crearDocumento(nombreArchivo, numero, materia, juzgado, especialista, tercero, demandado, demandante, estadoActual);
+        WordDocumentService.crearDocumento(nombreArchivo, numero, materia, juzgado, especialista, tercero, demandado, demandante, estadoLimpio);
     } else {
         rutaArchivo = Paths.get(PDF_FOLDER, nombreArchivo + ".pdf").toString();
-        PDFDocumentService.crearDocumento(nombreArchivo, numero, materia, juzgado, especialista, tercero, demandado, demandante, estadoActual);
+        PDFDocumentService.crearDocumento(nombreArchivo, numero, materia, juzgado, especialista, tercero, demandado, demandante, estadoLimpio);
     }
 
     // Registrar el archivo en la base de datos
@@ -60,7 +65,17 @@ public class ArchivoService {
         e.printStackTrace();
     }
 }
+    // Método para limpiar HTML y convertirlo a texto con formato básico
+    private String convertirHtmlATexto(String html) {
+    org.jsoup.nodes.Document doc = Jsoup.parse(html);
+    org.jsoup.select.Elements spans = doc.select("span");
 
+    StringBuilder textoConFormato = new StringBuilder();
+    for (org.jsoup.nodes.Element span : spans) {
+        textoConFormato.append(span.text()).append("\n");
+    }
+    return textoConFormato.toString().trim();
+    }
 
     public void agregarEstado(String numero, String nuevaResolucion) throws Exception {
         String queryArchivo = "SELECT nombre_archivo, tipo_archivo FROM archivos WHERE expediente_numero = ?";

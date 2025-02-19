@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Scanner;
 
+import j.m.models.Expediente;
 import j.m.models.Usuario;
 import j.m.services.ArchivoService;
 import j.m.services.ExpedienteService;
@@ -90,7 +91,7 @@ public class ExpedientesManager {
                     break;
 
                 case 2: // Ver todos los expedientes
-                    List<String> expedientes = expedienteService.verExpedientes();
+                    List<Expediente> expedientes = expedienteService.verExpedientes();
                     System.out.println("\n--- Lista de Expedientes ---");
                     for (String exp : expedientes) {
                         System.out.println(exp);

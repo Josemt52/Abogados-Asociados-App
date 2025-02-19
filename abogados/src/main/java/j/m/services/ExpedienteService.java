@@ -1,5 +1,6 @@
 package j.m.services;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
@@ -9,6 +10,10 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
+
+import j.m.models.Expediente;
 import j.m.utils.DBConnection;
 
 public class ExpedienteService {
@@ -63,45 +68,52 @@ public class ExpedienteService {
         } catch (SQLException e) {
             connection.rollback();
             System.out.println("Error al crear el expediente. No se realizaron cambios.");
-            e.printStackTrace();
         } finally {
             connection.setAutoCommit(true);
         }
     } catch (SQLException e) {
-        e.printStackTrace();
     }
 
     // Crear el archivo solo si los datos fueron guardados
     if (datosGuardados) {
         try {
             archivoService.crearArchivo(numero, tipoArchivo, nombreArchivo, numero, materia, juzgado, especialista, tercero, demandado, demandante, estadoActual);
-                    } catch (Exception e) {
+                    } catch (IOException e) {
                         System.out.println("Error al crear el archivo asociado.");
-                        e.printStackTrace();
                     }
                 }
             }
-            
-                public List<String> verExpedientes() {
-                    List<String> expedientes = new ArrayList<>();
-                    String query = "SELECT * FROM expedientes";
-            
-                    try (Connection connection = DBConnection.getConnection();
-                         PreparedStatement stmt = connection.prepareStatement(query);
-                         ResultSet rs = stmt.executeQuery()) {
-            
-                        while (rs.next()) {
-                            String expediente = "Número: " + rs.getString("numero") +
-                                    ", Materia: " + rs.getString("materia") +
-                                    ", Estado Actual: " + rs.getString("estado_actual");
-                            expedientes.add(expediente);
-                        }
-                    } catch (SQLException e) {
-                        e.printStackTrace();
-                    }
-                    return expedientes;
-                }
-                private static ArchivoService archivoService = new ArchivoService();
+            private static final ArchivoService archivoService = new ArchivoService();    
+    public static List<Expediente> verExpedientes() {
+    List<Expediente> expedientes = new ArrayList<>();
+    String query = "SELECT * FROM expedientes";
+
+    try (Connection connection = DBConnection.getConnection();
+         PreparedStatement stmt = connection.prepareStatement(query);
+         ResultSet rs = stmt.executeQuery()) {
+
+        while (rs.next()) {
+            Expediente expediente = new Expediente(
+                rs.getInt("id"),
+                rs.getString("numero"),
+                rs.getString("materia"),
+                rs.getString("juzgado"),
+                rs.getString("especialista"),
+                rs.getString("tercero"),
+                rs.getString("demandado"),
+                rs.getString("demandante"),
+                rs.getString("estado_actual"),
+                rs.getString("tipo_archivo"),
+                rs.getString("nombre_archivo")
+            );
+            expedientes.add(expediente);
+        }
+    } catch (SQLException e) {
+        e.printStackTrace(); // Para depuración
+    }
+    return expedientes;
+}
+               
     
     // Método para agregar un estado con documentos actualizados
     public void agregarEstadoExpedienteConDocumentos(String numeroExpediente, String nuevaResolucion) { 
@@ -145,12 +157,8 @@ public class ExpedienteService {
         } catch (Exception e) {
             // Si ocurre algún error, mostrar un mensaje y no proceder con la actualización del archivo
             System.out.println("Error al agregar la resolución al expediente. No se realizaron cambios.");
-            e.printStackTrace();
         }
     }
-    
-    
-    
     // Método para calcular el próximo número de resolución
     public int obtenerNumeroResolucion(String numeroExpediente) {
         String query = "SELECT IFNULL(MAX(numero_estado), 0) + 1 AS siguiente_resolucion " +
@@ -170,79 +178,87 @@ public class ExpedienteService {
     }
     
     // Método para agregar un estado a la base de datos
-    public void agregarEstadoExpediente(String numeroExpediente, String nuevoEstado) {
-        if (numeroExpediente == null || numeroExpediente.trim().isEmpty()) {
-            System.out.println("Error: El número de expediente no puede estar vacío.");
-            return;
-        }
-        if (nuevoEstado == null || nuevoEstado.trim().isEmpty()) {
-            System.out.println("Error: El estado no puede estar vacío. No se realizó ningún cambio.");
-            return;
-        }
-    
-        // SQL para verificar que el expediente existe y tiene un estado actual
-        String queryVerificarExpediente = "SELECT id, estado_actual FROM expedientes WHERE numero = ?";
-        String queryMoverEstado = "INSERT INTO historico_estados (expediente_id, estado, numero_estado) " +
-                                  "SELECT id, estado_actual, " +
-                                  "(SELECT IFNULL(MAX(numero_estado), 0) + 1 FROM historico_estados WHERE expediente_id = expedientes.id) " +
-                                  "FROM expedientes WHERE numero = ?";
-        String queryActualizarEstado = "UPDATE expedientes SET estado_actual = ? WHERE numero = ?";
-    
-        try (Connection connection = DBConnection.getConnection()) {
-            connection.setAutoCommit(false); // Iniciar transacción
-    
-            try (PreparedStatement stmtVerificarExpediente = connection.prepareStatement(queryVerificarExpediente)) {
-                // Verificar que el expediente existe y tiene un estado actual
-                stmtVerificarExpediente.setString(1, numeroExpediente);
-                ResultSet rs = stmtVerificarExpediente.executeQuery();
-    
-                if (!rs.next()) {
-                    throw new SQLException("Error: El número de expediente no existe o no tiene un estado actual.");
-                }
-    
-                int expedienteId = rs.getInt("id");
-                String estadoActual = rs.getString("estado_actual");
-    
-                if (estadoActual == null || estadoActual.trim().isEmpty()) {
-                    throw new SQLException("Error: El expediente no tiene un estado actual definido.");
-                }
-    
-                // Mover el estado actual al histórico
-                try (PreparedStatement stmtMoverEstado = connection.prepareStatement(queryMoverEstado)) {
-                    stmtMoverEstado.setString(1, numeroExpediente);
-                    int filasInsertadas = stmtMoverEstado.executeUpdate();
-    
-                    if (filasInsertadas == 0) {
-                        throw new SQLException("Error: No se pudo mover el estado actual al histórico.");
-                    }
-                }
-    
-                // Actualizar el nuevo estado como estado actual
-                try (PreparedStatement stmtActualizarEstado = connection.prepareStatement(queryActualizarEstado)) {
-                    stmtActualizarEstado.setString(1, nuevoEstado);
-                    stmtActualizarEstado.setString(2, numeroExpediente);
-                    int filasActualizadas = stmtActualizarEstado.executeUpdate();
-    
-                    if (filasActualizadas == 0) {
-                        throw new SQLException("Error: No se pudo actualizar el estado actual del expediente.");
-                    }
-                }
-    
-                connection.commit(); // Confirmar la transacción
-                System.out.println("Estado actualizado exitosamente en el expediente: " + numeroExpediente);
-    
-            } catch (SQLException e) {
-                connection.rollback(); // Revertir los cambios en caso de error
-                throw new SQLException("Error al mover el estado al histórico o actualizar el estado actual.", e);
-            } finally {
-                connection.setAutoCommit(true); // Restaurar auto-commit
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error al actualizar el estado en la base de datos.", e);
-        }
+    public void agregarEstadoExpediente(String numeroExpediente, String nuevoEstado) { 
+    if (numeroExpediente == null || numeroExpediente.trim().isEmpty()) {
+        System.out.println("Error: El número de expediente no puede estar vacío.");
+        return;
     }
+    if (nuevoEstado == null || nuevoEstado.trim().isEmpty()) {
+        System.out.println("Error: El estado no puede estar vacío. No se realizó ningún cambio.");
+        return;
+    }
+
+    // **Filtrar HTML antes de guardar el estado**
+    String estadoLimpio = Jsoup.clean(nuevoEstado, Safelist.none());
+
+    // SQL para verificar el expediente y su estado actual
+    String queryVerificarExpediente = "SELECT id, estado_actual FROM expedientes WHERE numero = ?";
     
+    // SQL para obtener el próximo número de estado
+    String queryObtenerNumeroEstado = "SELECT IFNULL(MAX(numero_estado), 0) + 1 FROM historico_estados WHERE expediente_id = ?";
+    
+    // SQL para mover el estado actual al histórico
+    String queryMoverEstado = "INSERT INTO historico_estados (expediente_id, estado, numero_estado) VALUES (?, ?, ?)";
+    
+    // SQL para actualizar el estado actual en la tabla expedientes
+    String queryActualizarEstado = "UPDATE expedientes SET estado_actual = ? WHERE numero = ?";
+
+    try (Connection connection = DBConnection.getConnection()) {
+        connection.setAutoCommit(false); // Iniciar transacción
+
+        try (PreparedStatement stmtVerificarExpediente = connection.prepareStatement(queryVerificarExpediente)) {
+            stmtVerificarExpediente.setString(1, numeroExpediente);
+            ResultSet rs = stmtVerificarExpediente.executeQuery();
+
+            if (!rs.next()) {
+                throw new SQLException("Error: El número de expediente no existe.");
+            }
+
+            int expedienteId = rs.getInt("id");
+            String estadoActual = rs.getString("estado_actual");
+
+            // Obtener el número del próximo estado
+            int numeroEstado = 1; // Si no hay histórico, empezamos desde 1
+            try (PreparedStatement stmtObtenerNumeroEstado = connection.prepareStatement(queryObtenerNumeroEstado)) {
+                stmtObtenerNumeroEstado.setInt(1, expedienteId);
+                ResultSet rsNumeroEstado = stmtObtenerNumeroEstado.executeQuery();
+                if (rsNumeroEstado.next()) {
+                    numeroEstado = rsNumeroEstado.getInt(1);
+                }
+            }
+
+            // Si hay un estado actual, moverlo al histórico
+            if (estadoActual != null && !estadoActual.trim().isEmpty()) {
+                try (PreparedStatement stmtMoverEstado = connection.prepareStatement(queryMoverEstado)) {
+                    stmtMoverEstado.setInt(1, expedienteId);
+                    stmtMoverEstado.setString(2, estadoActual);
+                    stmtMoverEstado.setInt(3, numeroEstado);
+                    stmtMoverEstado.executeUpdate();
+                }
+                numeroEstado++; // Incrementamos para el nuevo estado
+            }
+
+            // Actualizar el estado actual del expediente
+            try (PreparedStatement stmtActualizarEstado = connection.prepareStatement(queryActualizarEstado)) {
+                stmtActualizarEstado.setString(1, estadoLimpio);
+                stmtActualizarEstado.setString(2, numeroExpediente);
+                stmtActualizarEstado.executeUpdate();
+            }
+
+            connection.commit(); // Confirmar la transacción
+            System.out.println("Estado actualizado exitosamente en el expediente: " + numeroExpediente);
+
+        } catch (SQLException e) {
+            connection.rollback(); // Revertir cambios en caso de error
+            throw new SQLException("Error al mover el estado al histórico o actualizar el estado actual.", e);
+        } finally {
+            connection.setAutoCommit(true); // Restaurar auto-commit
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+        throw new RuntimeException("Error al actualizar el estado en la base de datos.", e);
+    }
+}
     
     // Método para obtener todos los estados de un expediente con numeración
     public List<String> obtenerEstadosConNumeracion(String numeroExpediente) {
@@ -349,6 +365,48 @@ public class ExpedienteService {
             e.printStackTrace();
             return false;
         }
+    }
+    public String obtenerEstadoActual(String numeroExpediente) {
+        String estadoActual = null;
+        String sql = "SELECT estado_actual FROM expedientes WHERE numero = ?";
+    
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, numeroExpediente);
+            ResultSet rs = stmt.executeQuery();
+    
+            if (rs.next()) {
+                estadoActual = rs.getString("estado_actual");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace(); // Manejo de error (se puede mejorar con logs)
+        }
+    
+        return estadoActual;
+    }
+    
+    public String obtenerRutaArchivo(String numeroExpediente, String tipoArchivo) {
+        String query = "SELECT nombre_archivo FROM archivos WHERE expediente_numero = ? AND tipo_archivo = ?";
+        try (Connection connection = DBConnection.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(query)) {
+    
+            stmt.setString(1, numeroExpediente);
+            stmt.setString(2, tipoArchivo);
+            ResultSet rs = stmt.executeQuery();
+    
+            if (rs.next()) {
+                String nombreArchivo = rs.getString("nombre_archivo");
+                if (tipoArchivo.equalsIgnoreCase("WORD")) {
+                    return System.getProperty("user.home") + "/Desktop/ExpedientesWord/" + nombreArchivo + ".docx";
+                } else {
+                    return System.getProperty("user.home") + "/Desktop/ExpedientesPDF/" + nombreArchivo + ".pdf";
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
     
 }

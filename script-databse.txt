@@ -1,41 +1,68 @@
-CREATE TABLE expedientes (
-    id INT AUTO_INCREMENT PRIMARY KEY,   
-    numero VARCHAR(50) NOT NULL UNIQUE,        
-    materia VARCHAR(100) DEFAULT NULL,        
-    juzgado VARCHAR(100) DEFAULT NULL,      
-    especialista VARCHAR(100) DEFAULT NULL,   
-    tercero VARCHAR(100) DEFAULT NULL,        
-    demandado VARCHAR(100) DEFAULT NULL,       
-    demandante VARCHAR(100) DEFAULT NULL,      
-    estado_actual VARCHAR(10000)   
-);
-CREATE TABLE historico_estados (
-    id INT AUTO_INCREMENT PRIMARY KEY,         
-    expediente_id INT NOT NULL,                
-    estado VARCHAR(10000) NOT NULL,              
-    numero_estado INT NOT NULL,
-    fecha_modificacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-    FOREIGN KEY (expediente_id) REFERENCES expedientes(id)  
-);
-CREATE TABLE archivos (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    expediente_numero VARCHAR(50) NOT NULL,
-    nombre_archivo VARCHAR(300) NOT NULL,
-    tipo_archivo ENUM('WORD', 'PDF') NOT NULL,
-    FOREIGN KEY (expediente_numero) REFERENCES expedientes(numero)
-);
+-- Eliminar la base de datos si ya existe (opcional)
+DROP DATABASE IF EXISTS expediente;
+
+-- Crear la base de datos
+CREATE DATABASE expediente;
+USE expediente;
+
+-- Tabla de Roles
 CREATE TABLE roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(50) NOT NULL UNIQUE
 );
+
+-- Tabla de Usuarios
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
+    nombre VARCHAR(100),
     username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,  -- Aún sin bcrypt
     rol_id INT NOT NULL,
-    FOREIGN KEY (rol_id) REFERENCES roles(id)
+    FOREIGN KEY (rol_id) REFERENCES roles(id) ON DELETE CASCADE
 );
 
+-- Tabla de Expedientes
+CREATE TABLE expedientes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero VARCHAR(50) NOT NULL UNIQUE,  -- Obligatorio
+    materia VARCHAR(100),
+    juzgado VARCHAR(100),
+    especialista VARCHAR(100),
+    tercero VARCHAR(100),
+    demandado VARCHAR(100),
+    demandante VARCHAR(100),
+    estado_actual TEXT NOT NULL  -- Obligatorio
+);
 
-DROP TABLE IF EXISTS archivos, historico_estados, expedientes,usuarios,roles;
+-- Tabla de Histórico de Estados (para resoluciones y cambios de estado)
+CREATE TABLE historico_estados (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    expediente_id INT NOT NULL,
+    numero_resolucion INT NOT NULL,
+    descripcion TEXT,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (expediente_id) REFERENCES expedientes(id) ON DELETE CASCADE
+);
+CREATE TABLE archivos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    expediente_numero VARCHAR(50) NOT NULL,
+    tipo_archivo VARCHAR(20) NOT NULL,
+    nombre_archivo VARCHAR(255) NOT NULL,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (expediente_numero) REFERENCES expedientes(numero) ON DELETE CASCADE
+);
+
+-- Insertar roles básicos
+INSERT INTO roles (nombre) VALUES ('Administrador'), ('Abogado'), ('Secretario');
+
+-- Insertar usuario de prueba
+INSERT INTO usuarios (nombre, username, password, rol_id) 
+VALUES ('Juan Pérez', 'admin', 'admin123', 1);
+
+-- Insertar un expediente de prueba
+INSERT INTO expedientes (numero, materia, juzgado, especialista, tercero, demandado, demandante, estado_actual)
+VALUES ('EXP-2025-001', 'Civil', 'Juzgado Nº 1', 'Carlos Gómez', 'Empresa X', 'Luis Martínez', 'Pedro Rodríguez', 'En proceso');
+
+-- Insertar una resolución en el histórico de estados
+INSERT INTO historico_estados (expediente_id, numero_resolucion, descripcion)
+VALUES (1, 1, 'Primera resolución del expediente.');
