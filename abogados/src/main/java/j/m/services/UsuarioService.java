@@ -1,44 +1,27 @@
 package j.m.services;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.TypedQuery;
 import j.m.models.Usuario;
-import j.m.utils.DBConnection;
+import j.m.utils.JPAUtil;
 
 public class UsuarioService {
-
     
     public Usuario validarUsuario(String username, String password) {
-        String query = "SELECT u.id, u.nombre, u.username, u.password, r.nombre AS rol " +
-                       "FROM usuarios u " +
-                       "JOIN roles r ON u.rol_id = r.id " +
-                       "WHERE u.username = ? AND u.password = ?";
-    
-        try (Connection connection = DBConnection.getConnection();
-             PreparedStatement stmt = connection.prepareStatement(query)) {
-    
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-    
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return new Usuario(
-                        rs.getInt("id"),
-                        rs.getString("nombre"),
-                        rs.getString("username"),
-                        rs.getString("password"),
-                        rs.getString("rol") // Aquí obtenemos el nombre del rol
-                    );
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        EntityManager em = JPAUtil.getEntityManager();
+        try {
+            // Usamos JPQL para la consulta
+            String jpql = "SELECT u FROM Usuario u WHERE u.username = :user AND u.password = :pass";
+            TypedQuery<Usuario> query = em.createQuery(jpql, Usuario.class);
+            query.setParameter("user", username);
+            query.setParameter("pass", password); // Aún sin hashear, pero funciona con JPA
+            
+            return query.getSingleResult();
+        } catch (NoResultException e) {
+            return null; // Usuario no encontrado
+        } finally {
+            em.close();
         }
-    
-        return null; // Usuario no encontrado
     }
 }
-
-

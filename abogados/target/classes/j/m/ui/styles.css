@@ -1,0 +1,25 @@
+.pulsing-button {
+    /* Define un borde inicial */
+    -fx-border-color: #0078D7;
+    -fx-border-width: 2px;
+    -fx-border-radius: 5px;
+
+    /* Define la animación */
+    -fx-animation: pulse 1.5s infinite;
+}
+
+/* Define los fotogramas de la animación */
+@keyframes pulse {
+    0% {
+        -fx-border-color: #0078D7;
+        -fx-background-color: -fx-base; /* Color de fondo por defecto */
+    }
+    50% {
+        -fx-border-color: #ff9900; /* Un color llamativo */
+        -fx-background-color: #ffe0b3; /* Un fondo sutil */
+    }
+    100% {
+        -fx-border-color: #0078D7;
+        -fx-background-color: -fx-base;
+    }
+}

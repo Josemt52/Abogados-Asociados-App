@@ -1,2 +1,15 @@
-C:\Users\jose\Desktop\abogados y asociados\abogados\src\main\java\j\m\DBConnection.java
-C:\Users\jose\Desktop\abogados y asociados\abogados\src\main\java\j\m\Expedientes.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Expediente.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\ArchivoService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\ExpedienteDialogController.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\UsuarioService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\WordDocumentService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\MainController.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\ExpedienteService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\PDFDocumentService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Usuario.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\MainApp.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\TextoUtil.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\WordEditorUtil.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Archivo.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\ExpedientesApp.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\JPAUtil.java
