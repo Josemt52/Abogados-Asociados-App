@@ -1,5 +1,6 @@
 package j.m.ui;
 
+import j.m.services.BackupService;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -10,6 +11,8 @@ public class MainApp extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
+        // Ejecutar backup automático al iniciar la app
+        new BackupService().checkAndPerformBackup();
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/j/m/ui/LoginView.fxml"));
         Parent root = loader.load();
 
