@@ -1,11 +1,26 @@
 package j.m.services;
 
-import jakarta.persistence.EntityManager;
-import j.m.models.Expediente;
-import j.m.utils.JPAUtil;
 import java.util.List;
 
+import j.m.models.Expediente;
+import j.m.utils.JPAUtil;
+import jakarta.persistence.EntityManager;
+
 public class ExpedienteService {
+    /**
+     * Busca expedientes cuyo número contenga el texto dado (filtro en BD).
+     */
+    public List<Expediente> buscarPorNumero(String texto) {
+        EntityManager em = JPAUtil.getEntityManager();
+        try {
+            String jpql = "SELECT e FROM Expediente e WHERE e.numero LIKE :num";
+            return em.createQuery(jpql, Expediente.class)
+                .setParameter("num", "%" + texto + "%")
+                .getResultList();
+        } finally {
+            em.close();
+        }
+    }
 
     public void crearOActualizar(Expediente expediente) {
         EntityManager em = JPAUtil.getEntityManager();

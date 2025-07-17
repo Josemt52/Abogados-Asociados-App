@@ -1,7 +1,14 @@
 package j.m.models;
 
-import jakarta.persistence.*;
-import java.util.List;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "expedientes")
@@ -50,4 +57,4 @@ public class Expediente {
     public void setEstado(String estado) { this.estado = estado; }
     public Archivo getArchivo() { return archivo; }
     public void setArchivo(Archivo archivo) { this.archivo = archivo; }
-}
+} 

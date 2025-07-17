@@ -1,46 +1,68 @@
 package j.m.services;
 
-import java.io.FileOutputStream;
+import java.io.File;
 import java.io.IOException;
+
+import org.jsoup.Jsoup;
 
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.properties.TextAlignment;
+
+import j.m.models.Expediente;
 
 public class PDFDocumentService {
 
-    public static void crearDocumento(String nombreArchivo, String numero, String materia, String juzgado,
-                                      String especialista, String tercero, String demandado,
-                                      String demandante, String estadoActual) throws IOException {
+    // Define la ruta base para los PDFs
+    private static final String PDF_FOLDER_PATH = System.getProperty("user.home") + "/Desktop/ExpedientesPDF";
 
-        // Obtener ruta del archivo
-        String filePath = System.getProperty("user.home") + "/Desktop/ExpedientesPDF/" + nombreArchivo + ".pdf";           
+    public static void crearDocumento(Expediente expediente) throws IOException {
+        // Asegura que el directorio de salida exista
+        new File(PDF_FOLDER_PATH).mkdirs();
 
-        try (PdfWriter writer = new PdfWriter(new FileOutputStream(filePath));
+        // Define el nombre del archivo de salida
+        String filePath = PDF_FOLDER_PATH + "/" + expediente.getArchivo().getNombreArchivo() + ".pdf";
+
+        try (PdfWriter writer = new PdfWriter(filePath);
              PdfDocument pdf = new PdfDocument(writer);
              Document document = new Document(pdf)) {
 
-            document.add(new Paragraph("EXPEDIENTE : " + numero).setBold());
-            document.add(new Paragraph("MATERIA : " + materia));
-            document.add(new Paragraph("JUEZ : " + juzgado));
-            document.add(new Paragraph("ESPECIALISTA : " + especialista));
-            document.add(new Paragraph("TERCERO : " + tercero));
-            document.add(new Paragraph("DEMANDADO : " + demandado));
-            document.add(new Paragraph("DEMANDANTE : " + demandante));
-            document.add(new Paragraph("\n"));
+            // Añade los datos del expediente con formato
+            document.add(new Paragraph("EXPEDIENTE : " + expediente.getNumero()).setBold());
+            document.add(new Paragraph("MATERIA : " + expediente.getMateria()));
+            document.add(new Paragraph("JUEZ : " + expediente.getJuzgado()));
+            document.add(new Paragraph("ESPECIALISTA : " + expediente.getEspecialista()));
+            document.add(new Paragraph("TERCERO : " + expediente.getTercero()));
+            document.add(new Paragraph("DEMANDADO : " + expediente.getDemandado()));
+            document.add(new Paragraph("DEMANDANTE : " + expediente.getDemandante()));
+            
+            // Añade un espacio
+            document.add(new Paragraph("\n")); 
 
-            document.add(new Paragraph("Resolución Nº 1").setBold().setFontSize(14));
-            document.add(new Paragraph(convertirHtmlATexto(estadoActual)).setFontSize(12));
+            // Añade el estado actual o la resolución
+            document.add(new Paragraph("Estado Actual del Expediente")
+                .setBold()
+                .setTextAlignment(TextAlignment.CENTER));
+                
+            // Limpia cualquier posible HTML del campo 'estado' antes de añadirlo
+            String estadoLimpio = convertirHtmlATexto(expediente.getEstado());
+            document.add(new Paragraph(estadoLimpio));
 
             System.out.println("Documento PDF creado en: " + filePath);
         }
     }
 
-    private static String convertirHtmlATexto(String estadoActual) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'convertirHtmlATexto'");
+    /**
+     * Utiliza Jsoup para eliminar etiquetas HTML de una cadena de texto.
+     * @param html El texto que puede contener HTML.
+     * @return El texto plano sin etiquetas HTML.
+     */
+    private static String convertirHtmlATexto(String html) {
+        if (html == null) {
+            return "";
+        }
+        return Jsoup.parse(html).text();
     }
-
-    
 }

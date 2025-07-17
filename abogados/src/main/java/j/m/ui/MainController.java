@@ -3,10 +3,14 @@ package j.m.ui;
 import java.io.File;
 import java.io.IOException;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import j.m.models.Expediente;
+import j.m.models.Usuario; // <-- Asegúrate de importar la clase Usuario
 import j.m.services.ArchivoService;
 import j.m.services.ExpedienteService;
+import j.m.services.PDFDocumentService;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
@@ -23,6 +27,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 public class MainController {
+    private static final Logger LOGGER = Logger.getLogger(MainController.class.getName());
 
     @FXML private TableView<Expediente> expedientesTable;
     @FXML private TableColumn<Expediente, String> numeroColumn;
@@ -30,16 +35,52 @@ public class MainController {
     @FXML private TableColumn<Expediente, String> demandanteColumn;
     @FXML private TableColumn<Expediente, String> demandadoColumn;
     @FXML private TableColumn<Expediente, String> estadoColumn;
-    
+
     @FXML private Button editarButton;
     @FXML private Button sincronizarButton;
-    @FXML private ToggleButton themeToggle; // Conexión para el botón de tema
+    @FXML private ToggleButton themeToggle;
+    @FXML private Button eliminarButton; // <-- Conexión para el botón de eliminar
+    @FXML private javafx.scene.control.TextField busquedaField;
+    @FXML
+    private void handleBuscarExpediente() {
+        String texto = busquedaField.getText().trim();
+        if (texto.isEmpty()) {
+            cargarExpedientes();
+            return;
+        }
+        // Ahora el filtrado se hace en la base de datos
+        expedientesTable.getItems().setAll(expedienteService.buscarPorNumero(texto));
+    }
 
     private final ExpedienteService expedienteService = new ExpedienteService();
     private final ArchivoService archivoService = new ArchivoService();
     
     private File archivoEnEdicion;
     private Expediente expedienteEnEdicion;
+    private Usuario usuarioLogueado; // <-- Variable para guardar el usuario actual
+
+    // --- INICIO DE LA MODIFICACIÓN ---
+    /**
+     * Este método es llamado por el LoginController para pasar el usuario
+     * que ha iniciado sesión.
+     */
+    public void setUsuarioLogueado(Usuario usuario) {
+        this.usuarioLogueado = usuario;
+        configurarVisibilidadPorRol();
+    }
+
+    /**
+     * Ajusta la visibilidad de los controles según el rol del usuario.
+     */
+    private void configurarVisibilidadPorRol() {
+        // Por defecto, el botón de eliminar no es visible
+        boolean esAdmin = false;
+        if (usuarioLogueado != null && usuarioLogueado.getRol() != null) {
+            esAdmin = "Admin".equalsIgnoreCase(usuarioLogueado.getRol().getNombre());
+        }
+        eliminarButton.setVisible(esAdmin);
+    }
+    // --- FIN DE LA MODIFICACIÓN ---
 
     @FXML
     public void initialize() {
@@ -49,8 +90,12 @@ public class MainController {
         demandadoColumn.setCellValueFactory(new PropertyValueFactory<>("demandado"));
         estadoColumn.setCellValueFactory(new PropertyValueFactory<>("estado"));
         cargarExpedientes();
+        
+        // Ocultar el botón de eliminar por defecto al iniciar.
+        // Se hará visible si el usuario es Admin.
+        eliminarButton.setVisible(false);
     }
-
+    
     private void cargarExpedientes() {
         expedientesTable.getItems().setAll(expedienteService.verExpedientes());
     }
@@ -64,7 +109,10 @@ public class MainController {
             dialogStage.setTitle("Crear Nuevo Expediente");
             dialogStage.initModality(Modality.WINDOW_MODAL);
             dialogStage.initOwner(expedientesTable.getScene().getWindow());
-            dialogStage.setScene(new Scene(page));
+            Scene dialogScene = new Scene(page);
+            // Copia los estilos activos de la ventana principal
+            dialogScene.getStylesheets().addAll(themeToggle.getScene().getStylesheets());
+            dialogStage.setScene(dialogScene);
             ExpedienteDialogController controller = loader.getController();
             controller.setDialogStage(dialogStage);
             dialogStage.showAndWait();
@@ -72,7 +120,8 @@ public class MainController {
                 cargarExpedientes();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error al abrir el diálogo de expediente", e);
+            mostrarError("Error inesperado", "No se pudo abrir el diálogo de expediente.");
         }
     }
 
@@ -94,7 +143,7 @@ public class MainController {
             mostrarAlerta("Edición en Progreso", "El documento se ha abierto. Cuando termines, guarda los cambios en Word y presiona 'Sincronizar Cambios'.");
         } catch (Exception e) {
             mostrarError("Error al abrir", "No se pudo abrir el documento: " + e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error al abrir el documento", e);
         }
     }
 
@@ -107,10 +156,15 @@ public class MainController {
         try {
             byte[] nuevosDatos = archivoService.leerBytesDeArchivo(archivoEnEdicion);
             expedienteEnEdicion.getArchivo().setDocumentoData(nuevosDatos);
-            
+
             TextInputDialog dialog = new TextInputDialog(expedienteEnEdicion.getEstado());
             dialog.setTitle("Actualizar Estado");
             dialog.setContentText("Resumen del nuevo estado:");
+            // Sincroniza el tema
+            Scene ownerScene = themeToggle.getScene();
+            if (ownerScene != null) {
+                dialog.getDialogPane().getStylesheets().setAll(ownerScene.getStylesheets());
+            }
             Optional<String> resultado = dialog.showAndWait();
             resultado.ifPresent(expedienteEnEdicion::setEstado);
 
@@ -118,7 +172,7 @@ public class MainController {
 
             expedienteEnEdicion = null;
             archivoEnEdicion = null;
-            
+
             editarButton.setDisable(false);
             sincronizarButton.setDisable(true);
             sincronizarButton.getStyleClass().remove("pulsing-button");
@@ -127,7 +181,7 @@ public class MainController {
             mostrarAlerta("Éxito", "El documento ha sido sincronizado.");
         } catch (Exception e) {
             mostrarError("Error al Sincronizar", e.getMessage());
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error al sincronizar el expediente", e);
         }
     }
 
@@ -141,6 +195,11 @@ public class MainController {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "¿Seguro que desea eliminar el expediente " + seleccionado.getNumero() + "?", ButtonType.YES, ButtonType.NO);
         alert.setTitle("Confirmar Eliminación");
         alert.setHeaderText(null);
+        // Sincroniza el tema
+        Scene ownerScene = themeToggle.getScene();
+        if (ownerScene != null) {
+            alert.getDialogPane().getStylesheets().setAll(ownerScene.getStylesheets());
+        }
         alert.showAndWait().ifPresent(response -> {
             if (response == ButtonType.YES) {
                 expedienteService.eliminarExpedientePorId(seleccionado.getId());
@@ -151,14 +210,24 @@ public class MainController {
     
     @FXML
     private void handleConvertirPDF() {
-        mostrarAlerta("Función no implementada", "La conversión a PDF se añadirá en una futura versión.");
+        Expediente seleccionado = expedientesTable.getSelectionModel().getSelectedItem();
+        if (seleccionado == null) {
+            mostrarAlerta("Ninguna selección", "Por favor, seleccione un expediente para convertir a PDF.");
+            return;
+        }
+        try {
+            PDFDocumentService.crearDocumento(seleccionado);
+            String pdfPath = System.getProperty("user.home") + "/Desktop/ExpedientesPDF/";
+            mostrarAlerta("Éxito", "El archivo PDF ha sido creado con éxito en la carpeta:\n" + pdfPath);
+        } catch (IOException e) {
+            mostrarError("Error de Conversión", "No se pudo crear el archivo PDF: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error al convertir a PDF", e);
+        }
     }
 
-    // --- MÉTODO FINAL QUE FALTABA ---
     @FXML
     private void handleToggleTheme() {
         Scene scene = themeToggle.getScene();
-        // Limpia cualquier hoja de estilo de tema anterior para evitar conflictos
         scene.getStylesheets().removeIf(css -> css.contains("theme.css"));
 
         if (themeToggle.isSelected()) {
@@ -174,6 +243,11 @@ public class MainController {
         Alert alert = new Alert(Alert.AlertType.INFORMATION, mensaje);
         alert.setTitle(titulo);
         alert.setHeaderText(null);
+        // Sincroniza el tema
+        Scene ownerScene = themeToggle.getScene();
+        if (ownerScene != null) {
+            alert.getDialogPane().getStylesheets().setAll(ownerScene.getStylesheets());
+        }
         alert.showAndWait();
     }
 
@@ -181,6 +255,11 @@ public class MainController {
         Alert alert = new Alert(Alert.AlertType.ERROR, mensaje);
         alert.setTitle(titulo);
         alert.setHeaderText(null);
+        // Sincroniza el tema
+        Scene ownerScene = themeToggle.getScene();
+        if (ownerScene != null) {
+            alert.getDialogPane().getStylesheets().setAll(ownerScene.getStylesheets());
+        }
         alert.showAndWait();
     }
 }
