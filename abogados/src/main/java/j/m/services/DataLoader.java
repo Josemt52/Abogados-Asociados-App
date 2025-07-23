@@ -2,8 +2,6 @@ package j.m.services;
 
 import java.util.List;
 
-import org.mindrot.jbcrypt.BCrypt;
-
 import j.m.models.Rol;
 import j.m.models.Usuario;
 import j.m.utils.JPAUtil;
@@ -53,7 +51,7 @@ public class DataLoader {
                 Usuario adminUser = new Usuario();
                 adminUser.setNombre("Administrador");
                 adminUser.setUsername("admin");
-                adminUser.setPassword(BCrypt.hashpw("admin", BCrypt.gensalt()));
+                adminUser.setPassword("admin");
                 adminUser.setRol(adminRol); // Enlazamos el rol que ya buscamos/creamos
                 em.persist(adminUser);
             } else {
@@ -61,12 +59,12 @@ public class DataLoader {
                 Usuario adminUser = admins.get(0);
                 String currentPassword = adminUser.getPassword();
                 
-                if (currentPassword == null || !currentPassword.startsWith("$2")) {
-                    System.out.println("La contraseña del usuario 'admin' no estaba cifrada. Actualizando ahora...");
-                    adminUser.setPassword(BCrypt.hashpw("admin", BCrypt.gensalt()));
+                if (currentPassword == null || !currentPassword.equals("admin")) {
+                    System.out.println("La contraseña del usuario 'admin' no era 'admin'. Actualizando ahora...");
+                    adminUser.setPassword("admin");
                     em.merge(adminUser);
                 } else {
-                    System.out.println("El usuario 'admin' ya tiene una contraseña cifrada.");
+                    System.out.println("El usuario 'admin' ya tiene la contraseña por defecto.");
                 }
             }
 

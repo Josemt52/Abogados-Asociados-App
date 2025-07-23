@@ -1,27 +1,16 @@
 package j.m.ui;
 
 import j.m.services.BackupService;
-import javafx.application.Application;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Parent;
-import javafx.scene.Scene;
-import javafx.stage.Stage;
 
-public class MainApp extends Application {
 
-    @Override
-    public void start(Stage primaryStage) throws Exception {
+public class MainApp {
+    public static void main(String[] args) {
         // Ejecutar backup automático al iniciar la app
         new BackupService().checkAndPerformBackup();
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/j/m/ui/LoginView.fxml"));
-        Parent root = loader.load();
-
-        Scene scene = new Scene(root, 400, 300);
-        scene.getStylesheets().add(getClass().getResource("/j/m/ui/light-theme.css").toExternalForm());
-        scene.getStylesheets().add(getClass().getResource("/j/m/ui/styles.css").toExternalForm());
-
-        primaryStage.setTitle("Inicio de Sesión");
-        primaryStage.setScene(scene);
-        primaryStage.show();
+        // Cargar datos iniciales (usuarios y roles)
+        new j.m.services.DataLoader().loadInitialData();
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            new LoginFrame();
+        });
     }
 }

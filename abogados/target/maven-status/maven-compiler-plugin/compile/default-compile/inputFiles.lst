@@ -1,6 +1,7 @@
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Expediente.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\ArchivoService.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\ExpedienteDialogController.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\MainFrame.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\UsuarioService.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\WordDocumentService.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\DataLoader.java
@@ -9,11 +10,15 @@ C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\PDFDocumentService.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Rol.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Usuario.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\ExpedienteDialog.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\LoginController.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\MainApp.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\LoginFrame.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\TextoUtil.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\WordEditorUtil.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\models\Archivo.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\ExpedientesApp.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\services\BackupService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\DBConnection.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\ui\RegistrarUsuarioDialog.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\abogados\src\main\java\j\m\utils\JPAUtil.java

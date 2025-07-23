@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Ejecutar aplicación Swing",
+			"command": "mvn clean compile exec:java -Dexec.mainClass=j.m.ui.MainApp",
+			"group": "build",
+			"problemMatcher": [
+				"$javac"
+			]
+		}
+	]
+}
