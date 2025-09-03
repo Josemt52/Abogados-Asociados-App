@@ -1,4 +1,4 @@
-package main.java.com.abogados.backend.controllers;
+package com.abogados.backend.controllers;
 
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;

@@ -2,8 +2,8 @@
 DROP DATABASE IF EXISTS expediente;
 
 -- Crear la base de datos
-CREATE DATABASE expediente;
-USE expediente;
+CREATE DATABASE Abogados_Asociados;
+USE Abogados_Asociados;
 
 -- Tabla de Roles
 CREATE TABLE roles (
