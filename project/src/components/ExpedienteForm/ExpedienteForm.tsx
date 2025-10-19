@@ -24,7 +24,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
     demandado: expediente?.demandado || '',
     demandante: expediente?.demandante || '',
     estado: expediente?.estado || '',
-    nombreArchivo: expediente?.nombreArchivo || '',
+    // NO incluir 'archivo' ni 'nombreArchivo' - se manejan automáticamente al subir archivo
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -204,20 +204,6 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-
-        <div>
-          <label htmlFor="nombreArchivo" className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre Archivo
-          </label>
-          <input
-            type="text"
-            id="nombreArchivo"
-            name="nombreArchivo"
-            value={formData.nombreArchivo}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
       </div>
 
       <div>
@@ -233,6 +219,9 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
           placeholder="Puede incluir HTML"
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
         />
+        <p className="mt-1 text-xs text-gray-500">
+          Nota: El archivo se sube después de crear el expediente usando el botón "Subir Archivo"
+        </p>
       </div>
 
       <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">

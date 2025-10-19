@@ -211,7 +211,6 @@ const RegistrarUsuario: React.FC = () => {
               >
                 <option value="usuario">Usuario</option>
                 <option value="admin">Administrador</option>
-                <option value="especialista">Especialista</option>
               </select>
             </div>
           </div>

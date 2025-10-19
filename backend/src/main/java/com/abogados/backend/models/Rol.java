@@ -1,5 +1,6 @@
 package com.abogados.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,7 @@ public class Rol {
     private String nombre;
 
     @OneToMany(mappedBy = "rol")
+    @JsonIgnore // Evitar serializar la lista de usuarios para prevenir recursión profunda
     private List<Usuario> usuarios = new ArrayList<>();
 
     public Rol() {}

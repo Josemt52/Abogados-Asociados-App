@@ -1,5 +1,6 @@
 package com.abogados.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 
 @Entity
@@ -22,8 +23,18 @@ public class Expediente {
     @Column(name = "estado_actual", columnDefinition = "TEXT")
     private String estado;
 
+    // Campo booleano que indica si tiene archivo adjunto
+    @Column(name = "archivo")
+    private Boolean archivo;
+
+    // Campo para almacenar el nombre del archivo
+    @Column(name = "nombre_archivo")
+    private String nombreArchivo;
+
+    // Relación opcional con la entidad Archivo (para datos binarios)
     @OneToOne(mappedBy = "expediente", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private Archivo archivo;
+    @JsonManagedReference
+    private Archivo archivoData;
 
     public Expediente() {}
 
@@ -45,6 +56,10 @@ public class Expediente {
     public void setDemandante(String demandante) { this.demandante = demandante; }
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
-    public Archivo getArchivo() { return archivo; }
-    public void setArchivo(Archivo archivo) { this.archivo = archivo; }
+    public Boolean getArchivo() { return archivo; }
+    public void setArchivo(Boolean archivo) { this.archivo = archivo; }
+    public String getNombreArchivo() { return nombreArchivo; }
+    public void setNombreArchivo(String nombreArchivo) { this.nombreArchivo = nombreArchivo; }
+    public Archivo getArchivoData() { return archivoData; }
+    public void setArchivoData(Archivo archivoData) { this.archivoData = archivoData; }
 }

@@ -43,18 +43,9 @@ api.interceptors.response.use(
 // API endpoints
 export const authAPI = {
   login: async (credentials: { username: string; password: string }) => {
-    // Temporary implementation - replace with proper auth endpoint
-    const response = await api.get('/api/usuarios');
-    const users = response.data;
-    const user = users.find((u: any) => 
-      u.username === credentials.username && u.password === credentials.password
-    );
-    
-    if (!user) {
-      throw new Error('Credenciales inválidas');
-    }
-    
-    return { user, token: 'mock-jwt-token' };
+    const response = await api.post('/api/auth/login', credentials);
+    // backend returns { user, token }
+    return response.data;
   },
   
   register: async (userData: any) => {
@@ -107,6 +98,14 @@ export const expedientesAPI = {
   
   downloadFile: async (id: string, archivoId: string) => {
     const response = await api.get(`/api/expedientes/${id}/archivo/${archivoId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  // Descargar archivo del expediente directamente (sin necesitar archivoId)
+  downloadExpedienteFile: async (id: string) => {
+    const response = await api.get(`/api/expedientes/${id}/archivo/download`, {
       responseType: 'blob',
     });
     return response.data;

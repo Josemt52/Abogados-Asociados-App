@@ -137,41 +137,19 @@ const Main: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Recent Activity - Comentado temporalmente hasta implementar historial real */}
+      {/* 
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
           Actividad Reciente
         </h2>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-200">
-          <div className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <p className="text-sm text-gray-900">
-                Expediente #2024-001 actualizado
-              </p>
-              <span className="text-xs text-gray-500">Hace 2 horas</span>
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-              <p className="text-sm text-gray-900">
-                Nuevo documento generado para expediente #2024-003
-              </p>
-              <span className="text-xs text-gray-500">Hace 5 horas</span>
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-              <p className="text-sm text-gray-900">
-                Resolución añadida a expediente #2024-002
-              </p>
-              <span className="text-xs text-gray-500">Hace 1 día</span>
-            </div>
+          <div className="p-4 text-center text-gray-500">
+            No hay actividad reciente registrada
           </div>
         </div>
       </div>
+      */}
     </div>
   );
 };

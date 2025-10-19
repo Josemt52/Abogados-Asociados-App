@@ -1,5 +1,7 @@
 package com.abogados.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 @Entity
@@ -16,11 +18,14 @@ public class Archivo {
     @Column(name = "tipo_archivo")
     private String tipoArchivo;
 
+    // No incluir los datos binarios en las respuestas JSON
+    @JsonIgnore
     @Column(name = "documento_data", length = 10485760)
     private byte[] documentoData;
 
     @OneToOne
-    @JoinColumn(name = "expediente_numero", referencedColumnName = "numero")
+    @JoinColumn(name = "expediente_id", referencedColumnName = "id")
+    @JsonBackReference
     private Expediente expediente;
 
     public Archivo() {}

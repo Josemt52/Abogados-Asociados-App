@@ -10,7 +10,6 @@ import {
   Download, 
   FileText, 
   File,
-  Plus,
   Trash2,
   Clock,
   User,
@@ -29,20 +28,15 @@ const ExpedienteDetail: React.FC = () => {
   
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showResolutionModal, setShowResolutionModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [resolutionData, setResolutionData] = useState({
-    numeroResolucion: '',
-    contenidoHtml: '',
-  });
 
   const { data: expediente, loading: expedienteLoading, refetch } = useFetch(
     () => expedientesAPI.getById(id!),
     [id]
   );
 
-  const { generateWord, generatePDF, addResolution, isGenerating } = useDocumentGeneration();
+  const { generateWord, generatePDF, isGenerating } = useDocumentGeneration();
 
   if (!id) {
     navigate('/expedientes');
@@ -50,21 +44,28 @@ const ExpedienteDetail: React.FC = () => {
   }
 
   const handleFileUpload = async (file: File, onProgress?: (progress: number) => void) => {
-    // Simulate progress for demo purposes
-    if (onProgress) {
-      for (let i = 0; i <= 100; i += 10) {
-        setTimeout(() => onProgress(i), i * 10);
+    try {
+      // Simulate progress for demo purposes
+      if (onProgress) {
+        for (let i = 0; i <= 100; i += 10) {
+          setTimeout(() => onProgress(i), i * 10);
+        }
       }
+      
+      await expedientesAPI.uploadFile(id, file);
+      toast.success('Archivo subido correctamente');
+      setShowUploadModal(false);
+      refetch(); // Refrescar para mostrar el nuevo estado
+    } catch (error) {
+      toast.error('Error al subir el archivo');
+      throw error;
     }
-    
-    await expedientesAPI.uploadFile(id, file);
-    refetch();
   };
 
-  const handleDownloadFile = async (archivoId: string) => {
+  const handleDownloadFile = async () => {
     try {
       setLoading(true);
-      const blob = await expedientesAPI.downloadFile(id, archivoId);
+      const blob = await expedientesAPI.downloadExpedienteFile(id);
       const filename = expediente?.nombreArchivo || 'documento.docx';
       downloadBlob(blob, filename);
       toast.success('Archivo descargado correctamente');
@@ -81,18 +82,6 @@ const ExpedienteDetail: React.FC = () => {
 
   const handleGeneratePDF = async () => {
     await generatePDF(id, expediente?.numero);
-  };
-
-  const handleAddResolution = async () => {
-    if (!resolutionData.numeroResolucion.trim() || !resolutionData.contenidoHtml.trim()) {
-      toast.error('Por favor, complete todos los campos');
-      return;
-    }
-
-    await addResolution(id, resolutionData);
-    setShowResolutionModal(false);
-    setResolutionData({ numeroResolucion: '', contenidoHtml: '' });
-    refetch();
   };
 
   const handleDelete = async () => {
@@ -257,26 +246,6 @@ const ExpedienteDetail: React.FC = () => {
             </div>
           )}
 
-          {/* Historial de Resoluciones */}
-          <div className="bg-white shadow-sm rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Historial de Resoluciones
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={() => setShowResolutionModal(true)}
-              >
-                Añadir Resolución
-              </Button>
-            </div>
-            <div className="text-sm text-gray-500 text-center py-8">
-              <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-              No hay resoluciones registradas
-            </div>
-          </div>
         </div>
 
         {/* Actions Sidebar */}
@@ -289,7 +258,7 @@ const ExpedienteDetail: React.FC = () => {
                 <Button
                   variant="outline"
                   icon={<Download className="h-4 w-4" />}
-                  onClick={() => handleDownloadFile(expediente.archivo.id)}
+                  onClick={handleDownloadFile}
                   loading={loading}
                   className="w-full justify-start"
                 >
@@ -372,62 +341,6 @@ const ExpedienteDetail: React.FC = () => {
           onUpload={handleFileUpload}
           loading={loading}
         />
-      </Modal>
-
-      {/* Resolution Modal */}
-      <Modal
-        isOpen={showResolutionModal}
-        onClose={() => setShowResolutionModal(false)}
-        title="Añadir Resolución"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Número de Resolución *
-            </label>
-            <input
-              type="text"
-              value={resolutionData.numeroResolucion}
-              onChange={(e) => setResolutionData(prev => ({ 
-                ...prev, 
-                numeroResolucion: e.target.value 
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Ej: RES-2024-001"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contenido HTML *
-            </label>
-            <textarea
-              rows={6}
-              value={resolutionData.contenidoHtml}
-              onChange={(e) => setResolutionData(prev => ({ 
-                ...prev, 
-                contenidoHtml: e.target.value 
-              }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Contenido de la resolución (puede incluir HTML)"
-            />
-          </div>
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-            <Button
-              variant="outline"
-              onClick={() => setShowResolutionModal(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleAddResolution}
-              loading={isGenerating}
-            >
-              Añadir Resolución
-            </Button>
-          </div>
-        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}
