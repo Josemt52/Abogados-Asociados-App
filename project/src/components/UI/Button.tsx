@@ -7,6 +7,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
   icon?: React.ReactNode;
   children: React.ReactNode;
+  as?: 'button' | 'span';
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -17,6 +18,7 @@ const Button: React.FC<ButtonProps> = ({
   children,
   className = '',
   disabled,
+  as = 'button',
   ...props
 }) => {
   const baseClasses = 'inline-flex items-center justify-center font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -34,15 +36,34 @@ const Button: React.FC<ButtonProps> = ({
     lg: 'px-6 py-3 text-base',
   };
 
-  return (
-    <button
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
-      disabled={disabled || loading}
-      {...props}
-    >
+  const combinedClasses = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
+
+  const content = (
+    <>
       {loading && <LoadingSpinner size="sm" className="mr-2" />}
       {!loading && icon && <span className="mr-2">{icon}</span>}
       {children}
+    </>
+  );
+
+  if (as === 'span') {
+    return (
+      <span
+        className={combinedClasses}
+        {...(props as any)}
+      >
+        {content}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      className={combinedClasses}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {content}
     </button>
   );
 };

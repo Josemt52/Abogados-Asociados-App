@@ -1,35 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../../api';
-import { User, Mail, Lock, UserCheck } from 'lucide-react';
+import { User, Lock, UserCheck } from 'lucide-react';
 import Button from '../../components/UI/Button';
 import toast from 'react-hot-toast';
+import axios from 'axios';
+
+interface Rol {
+  id: number;
+  nombre: string;
+}
 
 const RegistrarUsuario: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [roles, setRoles] = useState<Rol[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(true);
   const [formData, setFormData] = useState({
+    nombre: '',
     username: '',
-    email: '',
     password: '',
     confirmarPassword: '',
     rol: 'usuario',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Cargar roles disponibles al montar el componente
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+        const response = await axios.get<Rol[]>(`${API_BASE_URL}/api/roles`);
+        setRoles(response.data);
+        
+        // Si hay roles disponibles, establecer el primero como predeterminado
+        if (response.data.length > 0) {
+          setFormData(prev => ({ 
+            ...prev, 
+            rol: response.data.find(r => r.nombre === 'usuario')?.nombre || response.data[0].nombre 
+          }));
+        }
+      } catch (error) {
+        console.error('Error al cargar roles:', error);
+        toast.error('No se pudieron cargar los roles disponibles');
+        // Fallback a roles por defecto si falla la carga
+        setRoles([
+          { id: 1, nombre: 'admin' },
+          { id: 2, nombre: 'usuario' },
+          { id: 3, nombre: 'secretario' }
+        ]);
+      } finally {
+        setLoadingRoles(false);
+      }
+    };
+
+    fetchRoles();
+  }, []);
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+
+    if (!formData.nombre.trim()) {
+      newErrors.nombre = 'El nombre completo es obligatorio';
+    }
 
     if (!formData.username.trim()) {
       newErrors.username = 'El usuario es obligatorio';
     } else if (formData.username.length < 3) {
       newErrors.username = 'El usuario debe tener al menos 3 caracteres';
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'El email es obligatorio';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'El email no es válido';
     }
 
     if (!formData.password.trim()) {
@@ -94,6 +132,31 @@ const RegistrarUsuario: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
+              <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre Completo *
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  id="nombre"
+                  name="nombre"
+                  value={formData.nombre}
+                  onChange={handleChange}
+                  className={`block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.nombre ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Juan Pérez"
+                />
+              </div>
+              {errors.nombre && (
+                <p className="mt-1 text-sm text-red-600">{errors.nombre}</p>
+              )}
+            </div>
+
+            <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
                 Usuario *
               </label>
@@ -115,31 +178,6 @@ const RegistrarUsuario: React.FC = () => {
               </div>
               {errors.username && (
                 <p className="mt-1 text-sm text-red-600">{errors.username}</p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className={`block w-full pl-10 pr-3 py-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.email ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="correo@ejemplo.com"
-                />
-              </div>
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email}</p>
               )}
             </div>
 
@@ -207,10 +245,20 @@ const RegistrarUsuario: React.FC = () => {
                 name="rol"
                 value={formData.rol}
                 onChange={handleChange}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                disabled={loadingRoles}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
-                <option value="usuario">Usuario</option>
-                <option value="admin">Administrador</option>
+                {loadingRoles ? (
+                  <option>Cargando roles...</option>
+                ) : roles.length > 0 ? (
+                  roles.map((rol) => (
+                    <option key={rol.id} value={rol.nombre}>
+                      {rol.nombre.charAt(0).toUpperCase() + rol.nombre.slice(1)}
+                    </option>
+                  ))
+                ) : (
+                  <option value="usuario">Usuario</option>
+                )}
               </select>
             </div>
           </div>

@@ -28,9 +28,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // On 401, clear storage and notify the app instead of forcing a hard redirect.
+      // A global listener (AuthProvider / Layout) will handle navigation and cleanup.
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      try {
+        window.dispatchEvent(new Event('app:logout'));
+      } catch (e) {
+        // fallback to hard redirect if dispatch fails
+        window.location.href = '/login';
+      }
     }
     
     const message = error.response?.data?.message || 'Error en la operación';
@@ -144,6 +151,28 @@ export const estadisticasAPI = {
   
   getActividadReciente: async () => {
     const response = await api.get('/api/estadisticas/actividad-reciente');
+    return response.data;
+  }
+};
+
+export const usuariosAPI = {
+  getAll: async () => {
+    const response = await api.get('/api/usuarios');
+    return response.data;
+  },
+  
+  getById: async (id: number) => {
+    const response = await api.get(`/api/usuarios/${id}`);
+    return response.data;
+  },
+  
+  update: async (id: number, userData: any) => {
+    const response = await api.put(`/api/usuarios/${id}`, userData);
+    return response.data;
+  },
+  
+  delete: async (id: number) => {
+    const response = await api.delete(`/api/usuarios/${id}`);
     return response.data;
   }
 };

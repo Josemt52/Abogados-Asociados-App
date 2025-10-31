@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './hooks/useAuth';
@@ -10,6 +9,7 @@ import Main from './pages/Main/Main';
 import Expedientes from './pages/Expedientes/Expedientes';
 import ExpedienteDetail from './pages/ExpedienteDetail/ExpedienteDetail';
 import RegistrarUsuario from './pages/RegistrarUsuario/RegistrarUsuario';
+import Usuarios from './pages/Usuarios/Usuarios';
 
 function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,6 +45,7 @@ function App() {
             <Route path="main" element={<Main />} />
             <Route path="expedientes" element={<Expedientes />} />
             <Route path="expedientes/:id" element={<ExpedienteDetail />} />
+            <Route path="usuarios" element={<Usuarios />} />
             <Route path="usuarios/registrar" element={<RegistrarUsuario />} />
           </Route>
           

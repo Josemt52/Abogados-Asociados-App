@@ -20,7 +20,8 @@ public class Archivo {
 
     // No incluir los datos binarios en las respuestas JSON
     @JsonIgnore
-    @Column(name = "documento_data", length = 10485760)
+    @Lob
+    @Column(name = "documento_data", columnDefinition = "LONGBLOB")
     private byte[] documentoData;
 
     @OneToOne

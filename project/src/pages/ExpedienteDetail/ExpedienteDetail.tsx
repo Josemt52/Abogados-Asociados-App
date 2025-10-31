@@ -29,6 +29,9 @@ const ExpedienteDetail: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(false);
+  const [statusText, setStatusText] = useState<string>('');
+  const [statusLoading, setStatusLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const { data: expediente, loading: expedienteLoading, refetch } = useFetch(
@@ -55,7 +58,11 @@ const ExpedienteDetail: React.FC = () => {
       await expedientesAPI.uploadFile(id, file);
       toast.success('Archivo subido correctamente');
       setShowUploadModal(false);
-      refetch(); // Refrescar para mostrar el nuevo estado
+      await refetch(); // Refrescar para mostrar el nuevo estado
+
+      // Pre-fill status text from refreshed expediente and ask user if they want to update it
+      setStatusText((expediente && expediente.estado) || '');
+      setShowUpdateStatusModal(true);
     } catch (error) {
       toast.error('Error al subir el archivo');
       throw error;
@@ -101,6 +108,20 @@ const ExpedienteDetail: React.FC = () => {
   const handleEditSuccess = () => {
     setShowEditModal(false);
     refetch();
+  };
+
+  const handleUpdateStatus = async () => {
+    try {
+      setStatusLoading(true);
+      await expedientesAPI.update(id!, { estado: statusText });
+      toast.success('Estado del expediente actualizado');
+      setShowUpdateStatusModal(false);
+      await refetch();
+    } catch (error) {
+      toast.error('Error al actualizar el estado');
+    } finally {
+      setStatusLoading(false);
+    }
   };
 
   if (expedienteLoading) {
@@ -341,6 +362,32 @@ const ExpedienteDetail: React.FC = () => {
           onUpload={handleFileUpload}
           loading={loading}
         />
+      </Modal>
+
+      {/* Update Status Modal (shown after successful upload) */}
+      <Modal
+        isOpen={showUpdateStatusModal}
+        onClose={() => setShowUpdateStatusModal(false)}
+        title="Actualizar estado del expediente"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">¿Desea actualizar el estado del expediente ahora? Puede dejar una nota o pegar el texto del estado.</p>
+          <textarea
+            rows={6}
+            value={statusText}
+            onChange={(e) => setStatusText(e.target.value)}
+            className="w-full border border-gray-300 rounded-md p-2 text-sm"
+          />
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={() => setShowUpdateStatusModal(false)}>
+              No, luego
+            </Button>
+            <Button variant="primary" onClick={handleUpdateStatus} loading={statusLoading}>
+              Guardar estado
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Delete Confirmation Modal */}

@@ -4,6 +4,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import java.util.List;
+import java.util.Map;
 import com.abogados.backend.models.Usuario;
 import com.abogados.backend.models.Rol;
 import com.abogados.backend.dto.UserRegistrationRequest;
@@ -36,32 +37,102 @@ public class UsuarioController {
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody UserRegistrationRequest request) {
-        // Buscar el rol por nombre (case-insensitive)
-        Rol rol = rolRepository.findByNombreIgnoreCase(request.getRol())
-                .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + request.getRol()));
-        
-        // Crear el usuario
-        Usuario usuario = new Usuario();
-        usuario.setUsername(request.getUsername());
-        usuario.setEmail(request.getEmail());
-        usuario.setPassword(request.getPassword()); // TODO: Encriptar password
-        usuario.setRol(rol);
-        
-        Usuario saved = usuarioRepository.save(usuario);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        try {
+            // Validar que el request tenga los datos necesarios
+            if (request.getUsername() == null || request.getUsername().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El nombre de usuario es obligatorio"));
+            }
+            
+            if (request.getNombre() == null || request.getNombre().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El nombre es obligatorio"));
+            }
+            
+            if (request.getPassword() == null || request.getPassword().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "La contraseña es obligatoria"));
+            }
+            
+            if (request.getRol() == null || request.getRol().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El rol es obligatorio"));
+            }
+
+            // Verificar si el username ya existe
+            if (usuarioRepository.findByUsername(request.getUsername()).isPresent()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "El nombre de usuario ya existe"));
+            }
+
+            // Buscar el rol por nombre (case-insensitive)
+            Rol rol = rolRepository.findByNombreIgnoreCase(request.getRol())
+                    .orElseThrow(() -> new RuntimeException(
+                        "Rol no encontrado: '" + request.getRol() + "'. " +
+                        "Roles disponibles: admin, usuario. " +
+                        "Por favor ejecute el script de inicialización de roles."
+                    ));
+            
+            // Crear el usuario
+            Usuario usuario = new Usuario();
+            usuario.setNombre(request.getNombre());
+            usuario.setUsername(request.getUsername());
+            usuario.setPassword(request.getPassword()); // TODO: Encriptar password con BCrypt
+            usuario.setRol(rol);
+            
+            Usuario saved = usuarioRepository.save(usuario);
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+            
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Error al crear el usuario: " + e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Usuario> update(@PathVariable Integer id, @RequestBody Usuario usuario) {
-        return usuarioRepository.findById(id)
-                .map(existing -> {
-                    existing.setNombre(usuario.getNombre());
-                    existing.setUsername(usuario.getUsername());
-                    existing.setPassword(usuario.getPassword());
-                    existing.setRol(usuario.getRol());
-                    Usuario s = usuarioRepository.save(existing);
-                    return ResponseEntity.ok(s);
-                }).orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<?> update(@PathVariable Integer id, @RequestBody Map<String, Object> updateData) {
+        try {
+            return usuarioRepository.findById(id)
+                    .map(existing -> {
+                        // Actualizar nombre si viene en el request
+                        if (updateData.containsKey("nombre")) {
+                            existing.setNombre((String) updateData.get("nombre"));
+                        }
+                        
+                        // Actualizar username si viene en el request
+                        if (updateData.containsKey("username")) {
+                            existing.setUsername((String) updateData.get("username"));
+                        }
+                        
+                        // Actualizar password solo si viene en el request y no está vacío
+                        if (updateData.containsKey("password")) {
+                            String password = (String) updateData.get("password");
+                            if (password != null && !password.trim().isEmpty()) {
+                                existing.setPassword(password);
+                            }
+                        }
+                        
+                        // Actualizar rol si viene en el request
+                        if (updateData.containsKey("rol")) {
+                            String rolNombre = (String) updateData.get("rol");
+                            Rol rol = rolRepository.findByNombreIgnoreCase(rolNombre)
+                                    .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + rolNombre));
+                            existing.setRol(rol);
+                        }
+                        
+                        Usuario saved = usuarioRepository.save(existing);
+                        return ResponseEntity.ok(saved);
+                    }).orElse(ResponseEntity.notFound().build());
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Error al actualizar el usuario: " + e.getMessage()));
+        }
     }
 
     @DeleteMapping("/{id}")

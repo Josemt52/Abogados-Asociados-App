@@ -73,14 +73,16 @@ public class ExpedienteController {
     public ResponseEntity<ExpedienteDTO> update(@PathVariable Integer id, @RequestBody Expediente expediente) {
         return expedienteRepository.findById(id)
                 .map(existing -> {
-                    existing.setNumero(expediente.getNumero());
-                    existing.setMateria(expediente.getMateria());
-                    existing.setJuzgado(expediente.getJuzgado());
-                    existing.setEspecialista(expediente.getEspecialista());
-                    existing.setTercero(expediente.getTercero());
-                    existing.setDemandado(expediente.getDemandado());
-                    existing.setDemandante(expediente.getDemandante());
-                    existing.setEstado(expediente.getEstado());
+                    // Only overwrite fields that are present in the request body (non-null)
+                    if (expediente.getNumero() != null) existing.setNumero(expediente.getNumero());
+                    if (expediente.getMateria() != null) existing.setMateria(expediente.getMateria());
+                    if (expediente.getJuzgado() != null) existing.setJuzgado(expediente.getJuzgado());
+                    if (expediente.getEspecialista() != null) existing.setEspecialista(expediente.getEspecialista());
+                    if (expediente.getTercero() != null) existing.setTercero(expediente.getTercero());
+                    if (expediente.getDemandado() != null) existing.setDemandado(expediente.getDemandado());
+                    if (expediente.getDemandante() != null) existing.setDemandante(expediente.getDemandante());
+                    if (expediente.getEstado() != null) existing.setEstado(expediente.getEstado());
+                    if (expediente.getArchivo() != null) existing.setArchivo(expediente.getArchivo());
                     // NO actualizar 'archivo' ni 'nombreArchivo' desde el formulario
                     // Estos campos se actualizan automáticamente al subir archivo
                     Expediente s = expedienteRepository.save(existing);
