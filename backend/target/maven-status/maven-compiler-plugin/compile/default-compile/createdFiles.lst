@@ -21,10 +21,14 @@ com\abogados\backend\services\WordDocumentService.class
 com\abogados\backend\models\Usuario.class
 com\abogados\backend\controllers\DocumentoController$ResolutionRequest.class
 com\abogados\backend\controllers\DocumentoController.class
+com\abogados\backend\security\SecurityConfig.class
 com\abogados\backend\config\DataInitializer.class
 com\abogados\backend\controllers\ContactController$ContactRequest.class
 com\abogados\backend\dto\ExpedienteDTO.class
 com\abogados\backend\dto\UserRegistrationRequest.class
+com\abogados\backend\security\JwtAuthenticationFilter.class
 com\abogados\backend\BackendApplication.class
 com\abogados\backend\controllers\AuthController$LoginRequest.class
+com\abogados\backend\controllers\GlobalExceptionHandler.class
+com\abogados\backend\security\JwtService.class
 com\abogados\backend\controllers\RolController.class

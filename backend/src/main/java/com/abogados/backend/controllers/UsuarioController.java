@@ -17,10 +17,13 @@ public class UsuarioController {
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
-    public UsuarioController(UsuarioRepository usuarioRepository, RolRepository rolRepository) {
+    public UsuarioController(UsuarioRepository usuarioRepository, RolRepository rolRepository, 
+                            org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @GetMapping
@@ -77,7 +80,8 @@ public class UsuarioController {
             Usuario usuario = new Usuario();
             usuario.setNombre(request.getNombre());
             usuario.setUsername(request.getUsername());
-            usuario.setPassword(request.getPassword()); // TODO: Encriptar password con BCrypt
+            // Hashear contraseña con BCrypt
+            usuario.setPassword(passwordEncoder.encode(request.getPassword()));
             usuario.setRol(rol);
             
             Usuario saved = usuarioRepository.save(usuario);
@@ -111,7 +115,8 @@ public class UsuarioController {
                         if (updateData.containsKey("password")) {
                             String password = (String) updateData.get("password");
                             if (password != null && !password.trim().isEmpty()) {
-                                existing.setPassword(password);
+                                // Hashear nueva contraseña con BCrypt
+                                existing.setPassword(passwordEncoder.encode(password));
                             }
                         }
                         

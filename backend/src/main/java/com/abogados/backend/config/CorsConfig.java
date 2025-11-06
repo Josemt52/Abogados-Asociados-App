@@ -10,8 +10,14 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("*")
+                .allowedOrigins(
+                        "https://expedientes.abogadosyasociados.net.pe",
+                        "http://localhost:3000", // Para desarrollo local
+                        "http://localhost:5173", // Para Vite en desarrollo
+                        "https://gestor.abogadosyasociados.net.pe"
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*");
+                .allowedHeaders("*")
+                .allowCredentials(true);
     }
 }

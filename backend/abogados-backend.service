@@ -1,0 +1,39 @@
+[Unit]
+Description=Abogados Asociados Backend API
+Documentation=https://expedientes.abogadosyasociados.net.pe
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/abogados-backend
+
+# Java Options
+Environment="JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC"
+
+# Spring Boot Configuration - PRODUCTION PROFILE
+Environment="SPRING_PROFILES_ACTIVE=prod"
+
+# Database Configuration - Production
+Environment="SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/josemiguelo_abogados_asociados?useSSL=false&allowPublicKeyRetrieval=true"
+Environment="SPRING_DATASOURCE_USERNAME=josemiguelo_root"
+Environment="SPRING_DATASOURCE_PASSWORD=Morganella.12334"
+
+# Ejecutar aplicación con profile de producción
+ExecStart=/usr/bin/java ${JAVA_OPTS} -Dspring.profiles.active=${SPRING_PROFILES_ACTIVE} -jar /var/www/abogados-backend/backend-1.0.0.jar
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=abogados-backend
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

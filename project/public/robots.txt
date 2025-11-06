@@ -1,0 +1,7 @@
+# robots.txt para Abogados Asociados
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Allow: /
+
+Sitemap: https://expedientes.abogadosyasociados.net.pe/sitemap.xml

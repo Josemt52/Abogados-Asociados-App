@@ -22,5 +22,8 @@ C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\
 C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\repositories\ExpedienteRepository.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\repositories\RolRepository.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\repositories\UsuarioRepository.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\security\JwtAuthenticationFilter.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\security\JwtService.java
+C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\security\SecurityConfig.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\services\PDFDocumentService.java
 C:\Users\jose\Desktop\Abogados-Asociados-App\backend\src\main\java\com\abogados\backend\services\WordDocumentService.java
