@@ -76,7 +76,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
       await onUpload(file, (progress) => {
         setUploadProgress(progress);
       });
-      
+
       setSelectedFiles(prev => prev.filter(f => f !== file));
       toast.success('Archivo subido correctamente');
     } catch (error) {
@@ -99,11 +99,10 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     <div className="space-y-4">
       {selectedFiles.length === 0 ? (
         <div
-          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            dragOver
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragOver
               ? 'border-blue-400 bg-blue-50'
               : 'border-gray-300 hover:border-gray-400'
-          }`}
+            }`}
           onDragOver={(e) => {
             e.preventDefault();
             setDragOver(true);
@@ -113,7 +112,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
         >
           <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-sm text-gray-600 mb-2">
-            Arrastra y suelta {multiple ? 'archivos' : 'un archivo'} aquí, o 
+            Arrastra y suelta {multiple ? 'archivos' : 'un archivo'} aquí, o
           </p>
           <label className="inline-block">
             <input

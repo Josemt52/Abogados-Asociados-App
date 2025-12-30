@@ -5,6 +5,9 @@ backend/mvnw
 backend/mvnw.cmd
 backend/HELP.md
 backend/src/main/resources/application-prod.properties
+backend/.env
+backend/.env.local
+backend/.env.*.local
 
 # Frontend
 project/node_modules/

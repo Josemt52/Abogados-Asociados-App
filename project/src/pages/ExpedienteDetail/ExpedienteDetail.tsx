@@ -72,8 +72,8 @@ const ExpedienteDetail: React.FC = () => {
   const handleDownloadFile = async () => {
     try {
       setLoading(true);
-      const blob = await expedientesAPI.downloadExpedienteFile(id);
-      const filename = expediente?.nombreArchivo || 'documento.docx';
+      const blob = await expedientesAPI.downloadFile(id);
+      const filename = expediente?.nombre_archivo || 'documento.docx';
       downloadBlob(blob, filename);
       toast.success('Archivo descargado correctamente');
     } catch (error) {
@@ -244,7 +244,7 @@ const ExpedienteDetail: React.FC = () => {
                 <dd className="mt-1">
                   {expediente.archivo ? (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      ✓ {expediente.nombreArchivo || 'Disponible'}
+                      ✓ {expediente.nombre_archivo || 'Disponible'}
                     </span>
                   ) : (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -313,7 +313,7 @@ const ExpedienteDetail: React.FC = () => {
               <h3 className="text-sm font-semibold text-green-900 mb-3">Archivo Adjunto</h3>
               <div className="space-y-2">
                 <p className="text-sm text-green-700">
-                  <strong>Nombre:</strong> {expediente.nombreArchivo || 'documento.docx'}
+                  <strong>Nombre:</strong> {expediente.nombre_archivo || 'documento.docx'}
                 </p>
                 <p className="text-sm text-green-700">
                   <strong>Estado:</strong> Disponible

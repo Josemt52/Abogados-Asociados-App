@@ -15,8 +15,8 @@ const Expedientes: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: expedientes, loading, refetch } = useFetch(
-    () => expedientesAPI.getAll(currentPage, searchTerm),
-    [currentPage, searchTerm]
+    () => expedientesAPI.getAll(),
+    []
   );
 
   const handleRowClick = (expediente: any) => {
@@ -59,7 +59,7 @@ const Expedientes: React.FC = () => {
       setViewerLoading(true);
       setViewerMessage(null);
       // First try to download the stored file (could be docx, pdf, etc.)
-      const originalBlob = await expedientesAPI.downloadExpedienteFile(row.id);
+      const originalBlob = await expedientesAPI.downloadFile(row.id);
       const originalType = (originalBlob as Blob).type || '';
 
       if (originalType.includes('pdf')) {
@@ -70,7 +70,7 @@ const Expedientes: React.FC = () => {
       } else {
         // Not a PDF: attempt server-side conversion from Word -> PDF using existing endpoint
         try {
-          const pdfBlob = await expedientesAPI.generatePDF(row.id);
+          const pdfBlob = await expedientesAPI.generatePdf(row.id);
           const pdfUrl = URL.createObjectURL(pdfBlob);
           setViewerBlobUrl(pdfUrl);
           setViewerMimeType('application/pdf');
@@ -269,7 +269,7 @@ const Expedientes: React.FC = () => {
               <p className="mb-4 text-gray-700">El archivo asociado no es un PDF y no puede previsualizarse en el navegador.</p>
               <a
                 href={viewerBlobUrl}
-                download={selectedViewerRow?.nombreArchivo || 'documento'}
+                download={selectedViewerRow?.nombre_archivo || 'documento'}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md"
               >
                 Descargar archivo

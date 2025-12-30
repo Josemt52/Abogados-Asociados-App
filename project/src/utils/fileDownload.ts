@@ -1,28 +1,34 @@
-/**
- * Utility functions for file download handling
- */
 export const downloadBlob = (blob: Blob, filename: string) => {
   const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
 };
 
-export const getFileExtension = (filename: string): string => {
-  return filename.split('.').pop()?.toLowerCase() || '';
+export const validateFileSize = (file: File, maxSize: number): boolean => {
+  return file.size <= maxSize;
 };
 
-export const validateFileSize = (file: File, maxSizeBytes: number): boolean => {
-  return file.size <= maxSizeBytes;
-};
-
-export const validateFileType = (file: File, allowedTypes: string[]): boolean => {
-  const extension = '.' + getFileExtension(file.name);
-  return allowedTypes.includes(extension);
+export const validateFileType = (file: File, acceptedTypes: string[]): boolean => {
+  const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+  const fileMimeType = file.type.toLowerCase();
+  
+  return acceptedTypes.some(type => {
+    const normalizedType = type.trim().toLowerCase();
+    // Check by extension
+    if (normalizedType.startsWith('.')) {
+      return fileExtension === normalizedType;
+    }
+    // Check by MIME type
+    if (normalizedType.includes('/')) {
+      return fileMimeType === normalizedType || fileMimeType.startsWith(normalizedType.replace('*', ''));
+    }
+    return false;
+  });
 };
 
 export const formatFileSize = (bytes: number): string => {
@@ -32,5 +38,5 @@ export const formatFileSize = (bytes: number): string => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 };

@@ -24,7 +24,6 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
     demandado: expediente?.demandado || '',
     demandante: expediente?.demandante || '',
     estado: expediente?.estado || '',
-    // NO incluir 'archivo' ni 'nombreArchivo' - se manejan automáticamente al subir archivo
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -33,16 +32,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (!formData.numero.trim()) {
-      newErrors.numero = 'El número es obligatorio';
-    }
-    if (!formData.materia.trim()) {
-      newErrors.materia = 'La materia es obligatoria';
-    }
-    if (!formData.juzgado.trim()) {
-      newErrors.juzgado = 'El juzgado es obligatorio';
-    }
-    if (!formData.especialista.trim()) {
-      newErrors.especialista = 'El especialista es obligatorio';
+      newErrors.numero = 'El número de expediente es obligatorio';
     }
 
     setErrors(newErrors);
@@ -74,7 +64,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
@@ -89,7 +79,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label htmlFor="numero" className="block text-sm font-medium text-gray-700 mb-1">
-            Número *
+            Número de Expediente *
           </label>
           <input
             type="text"
@@ -97,6 +87,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="numero"
             value={formData.numero}
             onChange={handleChange}
+            placeholder="EXP-2024-001"
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
               errors.numero ? 'border-red-500' : 'border-gray-300'
             }`}
@@ -108,7 +99,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
 
         <div>
           <label htmlFor="materia" className="block text-sm font-medium text-gray-700 mb-1">
-            Materia *
+            Materia
           </label>
           <input
             type="text"
@@ -116,18 +107,14 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="materia"
             value={formData.materia}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.materia ? 'border-red-500' : 'border-gray-300'
-            }`}
+            placeholder="Civil, Penal, Laboral..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
-          {errors.materia && (
-            <p className="mt-1 text-sm text-red-600">{errors.materia}</p>
-          )}
         </div>
 
         <div>
           <label htmlFor="juzgado" className="block text-sm font-medium text-gray-700 mb-1">
-            Juzgado *
+            Juzgado
           </label>
           <input
             type="text"
@@ -135,18 +122,14 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="juzgado"
             value={formData.juzgado}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.juzgado ? 'border-red-500' : 'border-gray-300'
-            }`}
+            placeholder="Juzgado Civil..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
-          {errors.juzgado && (
-            <p className="mt-1 text-sm text-red-600">{errors.juzgado}</p>
-          )}
         </div>
 
         <div>
           <label htmlFor="especialista" className="block text-sm font-medium text-gray-700 mb-1">
-            Especialista *
+            Especialista
           </label>
           <input
             type="text"
@@ -154,13 +137,9 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="especialista"
             value={formData.especialista}
             onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
-              errors.especialista ? 'border-red-500' : 'border-gray-300'
-            }`}
+            placeholder="Nombre del especialista..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
-          {errors.especialista && (
-            <p className="mt-1 text-sm text-red-600">{errors.especialista}</p>
-          )}
         </div>
 
         <div>
@@ -173,6 +152,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="tercero"
             value={formData.tercero}
             onChange={handleChange}
+            placeholder="Tercero involucrado..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -187,6 +167,7 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="demandado"
             value={formData.demandado}
             onChange={handleChange}
+            placeholder="Nombre del demandado..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -201,27 +182,25 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
             name="demandante"
             value={formData.demandante}
             onChange={handleChange}
+            placeholder="Nombre del demandante..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-      </div>
 
-      <div>
-        <label htmlFor="estado" className="block text-sm font-medium text-gray-700 mb-1">
-          Estado
-        </label>
-        <textarea
-          id="estado"
-          name="estado"
-          rows={4}
-          value={formData.estado}
-          onChange={handleChange}
-          placeholder="Puede incluir HTML"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-        />
-        <p className="mt-1 text-xs text-gray-500">
-          Nota: El archivo se sube después de crear el expediente usando el botón "Subir Archivo"
-        </p>
+        <div>
+          <label htmlFor="estado" className="block text-sm font-medium text-gray-700 mb-1">
+            Estado
+          </label>
+          <input
+            type="text"
+            id="estado"
+            name="estado"
+            value={formData.estado}
+            onChange={handleChange}
+            placeholder="Estado del expediente..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">

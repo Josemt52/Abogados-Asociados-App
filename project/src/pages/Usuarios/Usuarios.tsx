@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Edit, Trash2, UserPlus, Shield, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFetch } from '../../hooks/useFetch';
-import { api } from '../../api';
+import { usuariosAPI } from '../../api';
 import Table from '../../components/UI/Table';
 import Button from '../../components/UI/Button';
 import Modal from '../../components/UI/Modal';
@@ -45,8 +45,7 @@ const Usuarios: React.FC = () => {
 
   const { data: usuarios, loading, refetch } = useFetch<User[]>(
     async () => {
-      const response = await api.get('/api/usuarios');
-      return response.data;
+      return await usuariosAPI.getAll();
     },
     []
   );
@@ -98,7 +97,7 @@ const Usuarios: React.FC = () => {
       const updateData: any = {
         nombre: editFormData.nombre,
         username: editFormData.username,
-        rol: editFormData.rolId === 1 ? 'admin' : 'usuario',
+        rol_id: editFormData.rolId,
       };
 
       // Solo incluir password si se ingresó uno nuevo
@@ -106,7 +105,7 @@ const Usuarios: React.FC = () => {
         updateData.password = editFormData.password;
       }
 
-      await api.put(`/api/usuarios/${selectedUser.id}`, updateData);
+      await usuariosAPI.update(selectedUser.id, updateData);
       toast.success('Usuario actualizado correctamente');
       setShowEditModal(false);
       setSelectedUser(null);
@@ -123,7 +122,7 @@ const Usuarios: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await api.delete(`/api/usuarios/${selectedUser.id}`);
+      await usuariosAPI.delete(selectedUser.id);
       toast.success('Usuario eliminado correctamente');
       setShowDeleteModal(false);
       setSelectedUser(null);
@@ -165,11 +164,10 @@ const Usuarios: React.FC = () => {
       header: 'Rol',
       render: (value: { nombre: string }) => (
         <span
-          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            value.nombre.toLowerCase() === 'admin'
-              ? 'bg-purple-100 text-purple-800'
-              : 'bg-blue-100 text-blue-800'
-          }`}
+          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${value.nombre.toLowerCase() === 'admin'
+            ? 'bg-purple-100 text-purple-800'
+            : 'bg-blue-100 text-blue-800'
+            }`}
         >
           <Shield className="h-3 w-3 mr-1" />
           {value.nombre}
@@ -255,8 +253,8 @@ const Usuarios: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Buscar por nombre, usuario o rol..."
-          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Buscar por nombre, usuario o rol..."
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
       </div>

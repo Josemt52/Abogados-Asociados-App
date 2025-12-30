@@ -1,56 +1,46 @@
 import { useState } from 'react';
 import { expedientesAPI } from '../api';
-import { downloadBlob } from '../utils/fileDownload';
 import toast from 'react-hot-toast';
 
-interface UseDocumentGenerationReturn {
-  generateWord: (expedienteId: string, filename?: string) => Promise<void>;
-  generatePDF: (expedienteId: string, filename?: string) => Promise<void>;
-  addResolution: (expedienteId: string, data: { contenidoHtml: string; numeroResolucion: string }) => Promise<void>;
-  isGenerating: boolean;
-}
-
-export const useDocumentGeneration = (): UseDocumentGenerationReturn => {
+export const useDocumentGeneration = () => {
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const generateWord = async (expedienteId: string, filename?: string) => {
-    setIsGenerating(true);
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const generateWord = async (expedienteId: string, numeroExpediente?: string) => {
     try {
-      const blob = await expedientesAPI.generateWord(expedienteId, filename);
-      const downloadFilename = filename ? `${filename}.docx` : `expediente-${expedienteId}.docx`;
-      downloadBlob(blob, downloadFilename);
+      setIsGenerating(true);
+      const blob = await expedientesAPI.generateWord(Number(expedienteId));
+      const filename = `expediente_${numeroExpediente || expedienteId}.docx`;
+      downloadBlob(blob, filename);
       toast.success('Documento Word generado correctamente');
     } catch (error) {
-      console.error('Error generating Word document:', error);
-      toast.error('Error al generar el documento Word');
+      toast.error('Error al generar documento Word');
+      console.error(error);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const generatePDF = async (expedienteId: string, filename?: string) => {
-    setIsGenerating(true);
+  const generatePDF = async (expedienteId: string, numeroExpediente?: string) => {
     try {
-      const blob = await expedientesAPI.generatePDF(expedienteId, filename);
-      const downloadFilename = filename ? `${filename}.pdf` : `expediente-${expedienteId}.pdf`;
-      downloadBlob(blob, downloadFilename);
-      toast.success('PDF generado correctamente');
+      setIsGenerating(true);
+      const blob = await expedientesAPI.generatePdf(Number(expedienteId));
+      const filename = `expediente_${numeroExpediente || expedienteId}.pdf`;
+      downloadBlob(blob, filename);
+      toast.success('Documento PDF generado correctamente');
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast.error('Error al generar el PDF');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const addResolution = async (expedienteId: string, data: { contenidoHtml: string; numeroResolucion: string }) => {
-    setIsGenerating(true);
-    try {
-      await expedientesAPI.addResolution(expedienteId, data);
-      toast.success('Resolución añadida correctamente');
-    } catch (error) {
-      console.error('Error adding resolution:', error);
-      toast.error('Error al añadir la resolución');
+      toast.error('Error al generar documento PDF');
+      console.error(error);
     } finally {
       setIsGenerating(false);
     }
@@ -59,7 +49,6 @@ export const useDocumentGeneration = (): UseDocumentGenerationReturn => {
   return {
     generateWord,
     generatePDF,
-    addResolution,
     isGenerating,
   };
 };

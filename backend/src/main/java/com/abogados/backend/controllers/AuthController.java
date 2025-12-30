@@ -34,13 +34,10 @@ public class AuthController {
         
         return usuarioRepository.findByUsername(req.username())
                 .map(user -> {
-                    logger.info("Usuario encontrado: {}", user.getUsername());
-                    logger.info("Password en DB (primeros 20 chars): {}", user.getPassword().substring(0, Math.min(20, user.getPassword().length())));
-                    logger.info("Password ingresado: {}", req.password());
+                    logger.debug("Usuario encontrado: {}", user.getUsername());
                     
                     // Verificar contraseña con BCrypt
                     boolean matches = passwordEncoder.matches(req.password(), user.getPassword());
-                    logger.info("Password matches: {}", matches);
                     
                     if (user.getPassword() != null && matches) {
                         // Generar JWT real

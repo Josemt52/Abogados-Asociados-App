@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI } from '../../api';
+import { usuariosAPI } from '../../api';
 import { User, Lock, UserCheck } from 'lucide-react';
 import Button from '../../components/UI/Button';
 import toast from 'react-hot-toast';
-import axios from 'axios';
 
 interface Rol {
   id: number;
@@ -29,26 +28,16 @@ const RegistrarUsuario: React.FC = () => {
   useEffect(() => {
     const fetchRoles = async () => {
       try {
-        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-        const response = await axios.get<Rol[]>(`${API_BASE_URL}/api/roles`);
-        setRoles(response.data);
-        
-        // Si hay roles disponibles, establecer el primero como predeterminado
-        if (response.data.length > 0) {
-          setFormData(prev => ({ 
-            ...prev, 
-            rol: response.data.find(r => r.nombre === 'usuario')?.nombre || response.data[0].nombre 
-          }));
-        }
+        // Roles fijos basados en el backend Laravel
+        const rolesData: Rol[] = [
+          { id: 1, nombre: 'ADMIN' },
+          { id: 2, nombre: 'USUARIO' },
+        ];
+        setRoles(rolesData);
+        setFormData(prev => ({ ...prev, rol: 'USUARIO' }));
       } catch (error) {
         console.error('Error al cargar roles:', error);
         toast.error('No se pudieron cargar los roles disponibles');
-        // Fallback a roles por defecto si falla la carga
-        setRoles([
-          { id: 1, nombre: 'admin' },
-          { id: 2, nombre: 'usuario' },
-          { id: 3, nombre: 'secretario' }
-        ]);
       } finally {
         setLoadingRoles(false);
       }
@@ -96,10 +85,20 @@ const RegistrarUsuario: React.FC = () => {
     try {
       // Remove confirmarPassword before sending to API
       const { confirmarPassword, ...userData } = formData;
-      await authAPI.register(userData);
+      
+      // Buscar el rol_id basado en el nombre del rol
+      const selectedRole = roles.find(r => r.nombre === userData.rol);
+      const rol_id = selectedRole?.id || 2; // Default a usuario (2)
+      
+      await usuariosAPI.create({
+        nombre: userData.nombre,
+        username: userData.username,
+        password: userData.password,
+        rol_id: rol_id,
+      });
       
       toast.success('Usuario registrado correctamente');
-      navigate('/main');
+      navigate('/usuarios');
     } catch (error) {
       // Error handling is done by the API interceptor
     } finally {

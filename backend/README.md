@@ -23,7 +23,29 @@
 
 ### Pasos
 
-1. **Asegúrate de que MySQL esté corriendo** y la base de datos existe:
+1. **Configurar variables de entorno** (CRÍTICO):
+   
+   Crea un archivo `.env` en la carpeta `backend/` copiando `.env.example`:
+   ```bash
+   cp backend/.env.example backend/.env
+   ```
+   
+   Edita `backend/.env` y configura los valores reales:
+   ```properties
+   # Base de datos
+   DB_URL=jdbc:mysql://localhost:3306/abogados_asociados?useSSL=false&allowPublicKeyRetrieval=true
+   DB_USERNAME=tu_usuario_mysql
+   DB_PASSWORD=tu_password_mysql
+   
+   # JWT Secret (IMPORTANTE: En producción usa un valor aleatorio seguro)
+   # Genera uno con: openssl rand -base64 32
+   JWT_SECRET=tu-secret-key-muy-seguro-minimo-256-bits
+   JWT_EXPIRATION=86400000
+   ```
+   
+   > **⚠️ NUNCA SUBAS EL ARCHIVO .env AL REPOSITORIO**
+
+2. **Asegúrate de que MySQL esté corriendo** y la base de datos existe:
    ```sql
    CREATE DATABASE IF NOT EXISTS abogados_db;
    ```
@@ -120,8 +142,11 @@
 
 ## TODO / Mejoras Pendientes
 
-- [ ] Encriptar contraseñas con BCrypt (actualmente en texto plano)
-- [ ] Implementar JWT real en lugar de mock token
-- [ ] Añadir validación de email con regex en el backend
+- [x] ~~Encriptar contraseñas con BCrypt~~ - ✅ Implementado
+- [x] ~~Implementar JWT real en lugar de mock token~~ - ✅ Implementado  
+- [x] ~~Externalizar secrets y credenciales~~ - ✅ Implementado
 - [ ] Implementar refresh tokens
+- [ ] Añadir validación de email con regex en el backend
 - [ ] Añadir auditoría (createdAt, updatedAt en entidades)
+- [ ] Implementar rate limiting para prevenir brute force
+- [ ] Migrar a Flyway para control de versiones de BD
