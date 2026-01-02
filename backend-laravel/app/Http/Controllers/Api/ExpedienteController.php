@@ -105,6 +105,7 @@ class ExpedienteController extends Controller
 
     /**
      * Upload file to expediente
+     * Converts Word documents to PDF automatically
      */
     public function uploadFile(Request $request, $id)
     {
@@ -116,27 +117,58 @@ class ExpedienteController extends Controller
         $file = $request->file('file');
 
         try {
-            // Leer el contenido del archivo como binario y codificarlo en base64
-            $documentoData = base64_encode(file_get_contents($file->getRealPath()));
+            $mimeType = $file->getClientMimeType();
+            $fileName = $file->getClientOriginalName();
+            $documentoData = null;
+            
+            // If file is Word, convert to PDF
+            if (in_array($mimeType, [
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/msword'
+            ])) {
+                // Load Word document
+                $phpWord = \PhpOffice\PhpWord\IOFactory::load($file->getRealPath());
+                $htmlWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'HTML');
+                
+                $tempHtmlPath = storage_path('app/temp/' . uniqid() . '.html');
+                $htmlWriter->save($tempHtmlPath);
+                
+                $htmlContent = file_get_contents($tempHtmlPath);
+                
+                // Convert to PDF
+                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($htmlContent);
+                $pdfContent = $pdf->output();
+                
+                // Clean up temp file
+                @unlink($tempHtmlPath);
+                
+                // Store as PDF
+                $documentoData = base64_encode($pdfContent);
+                $mimeType = 'application/pdf';
+                $fileName = preg_replace('/\.(docx?|DOCX?)$/', '.pdf', $fileName);
+            } else {
+                // If already PDF, store as-is
+                $documentoData = base64_encode(file_get_contents($file->getRealPath()));
+            }
 
             // Buscar archivo existente o crear nuevo
             $archivo = Archivo::firstOrNew(['expediente_id' => $id]);
-            $archivo->nombre_archivo = $file->getClientOriginalName();
-            $archivo->tipo_archivo = $file->getClientMimeType();
+            $archivo->nombre_archivo = $fileName;
+            $archivo->tipo_archivo = $mimeType;
             $archivo->documento_data = $documentoData;
             $archivo->expediente_id = $id;
             $archivo->save();
 
             // ACTUALIZAR EL ESTADO DEL EXPEDIENTE: marcar que tiene archivo
             $expediente->archivo = true;
-            $expediente->nombre_archivo = $file->getClientOriginalName();
+            $expediente->nombre_archivo = $fileName;
             $expediente->save();
 
             return response()->json($expediente);
             
         } catch (\Exception $e) {
             Log::error('Error uploading file: ' . $e->getMessage());
-            return response()->json(['error' => 'Error al subir el archivo'], 500);
+            return response()->json(['error' => 'Error al subir el archivo: ' . $e->getMessage()], 500);
         }
     }
 

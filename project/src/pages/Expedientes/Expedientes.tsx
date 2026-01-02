@@ -230,52 +230,94 @@ const Expedientes: React.FC = () => {
 
       {/* Viewer Modal */}
       <Modal
-      isOpen={showViewerModal}
-      onClose={() => {
-        setShowViewerModal(false);
-        // cleanup blob URL
-        if (viewerBlobUrl) {
-          URL.revokeObjectURL(viewerBlobUrl);
-          setViewerBlobUrl(null);
-        }
-        setViewerMessage(null);
-        setViewerMimeType(null);
-        setSelectedViewerRow(null);
-      }}
-        title="Visor de Documento"
-        size="xl"
+        isOpen={showViewerModal}
+        onClose={() => {
+          setShowViewerModal(false);
+          // cleanup blob URL
+          if (viewerBlobUrl) {
+            URL.revokeObjectURL(viewerBlobUrl);
+            setViewerBlobUrl(null);
+          }
+          setViewerMessage(null);
+          setViewerMimeType(null);
+          setSelectedViewerRow(null);
+        }}
+        title={`Visor de Documento - ${selectedViewerRow?.numero || ''}`}
+        size="full"
       >
-        <div className="w-4/5 h-[80vh] mx-auto">
-          {viewerLoading && (
-            <div className="flex items-center justify-center h-full">Cargando documento...</div>
-          )}
-
-          {!viewerLoading && viewerMessage && (
-            <div className="p-6 text-center text-gray-700">{viewerMessage}</div>
-          )}
-
-          {!viewerLoading && viewerBlobUrl && viewerMimeType && viewerMimeType.includes('pdf') && (
-            <div className="h-full">
-              <iframe
-                src={viewerBlobUrl}
-                title="Documento PDF"
-                className="w-full h-full border"
-              />
-            </div>
-          )}
-
-          {!viewerLoading && viewerBlobUrl && viewerMimeType && !viewerMimeType.includes('pdf') && (
-            <div className="p-6 text-center">
-              <p className="mb-4 text-gray-700">El archivo asociado no es un PDF y no puede previsualizarse en el navegador.</p>
+        <div className="flex flex-col h-[85vh]">
+          {/* Toolbar */}
+          {!viewerLoading && viewerBlobUrl && (
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+              <div className="text-sm text-gray-600">
+                {selectedViewerRow?.nombre_archivo || 'documento.pdf'}
+              </div>
               <a
                 href={viewerBlobUrl}
-                download={selectedViewerRow?.nombre_archivo || 'documento'}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md"
+                download={selectedViewerRow?.nombre_archivo || 'documento.pdf'}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md transition-colors"
               >
-                Descargar archivo
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Descargar
               </a>
             </div>
           )}
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {viewerLoading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Cargando documento...</p>
+                </div>
+              </div>
+            )}
+
+            {!viewerLoading && viewerMessage && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center p-6">
+                  <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-gray-700">{viewerMessage}</p>
+                </div>
+              </div>
+            )}
+
+            {!viewerLoading && viewerBlobUrl && viewerMimeType && viewerMimeType.includes('pdf') && (
+              <iframe
+                src={viewerBlobUrl}
+                title="Documento PDF"
+                className="w-full h-full"
+                style={{ border: 'none' }}
+              />
+            )}
+
+            {!viewerLoading && viewerBlobUrl && viewerMimeType && !viewerMimeType.includes('pdf') && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center p-6">
+                  <svg className="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="mb-4 text-gray-700 font-medium">El archivo asociado no es un PDF</p>
+                  <p className="text-sm text-gray-500 mb-4">Este tipo de archivo no puede previsualizarse en el navegador</p>
+                  <a
+                    href={viewerBlobUrl}
+                    download={selectedViewerRow?.nombre_archivo || 'documento'}
+                    className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Descargar archivo
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
     </div>

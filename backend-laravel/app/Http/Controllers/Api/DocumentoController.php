@@ -26,7 +26,7 @@ class DocumentoController extends Controller
      */
     public function generateWord(string $id)
     {
-        $expediente = Expediente::with('usuario')->findOrFail($id);
+        $expediente = Expediente::findOrFail($id);
         
         try {
             $filePath = $this->wordService->generateExpedienteDocument($expediente);
@@ -41,21 +41,36 @@ class DocumentoController extends Controller
     }
 
     /**
-     * Generate PDF document for expediente.
+     * Get PDF document for expediente from stored archivo.
+     * Documents are already stored as PDF after upload conversion.
      */
     public function generatePdf(string $id)
     {
-        $expediente = Expediente::with('usuario')->findOrFail($id);
+        $expediente = Expediente::with('archivoData')->findOrFail($id);
+        
+        // Check if expediente has an archivo
+        if (!$expediente->archivoData) {
+            return response()->json([
+                'error' => 'Este expediente no tiene un documento asociado'
+            ], 404);
+        }
+        
+        $archivo = $expediente->archivoData;
         
         try {
-            $pdf = $this->pdfService->generateExpedienteDocument($expediente);
+            // Decode the base64 stored document (already PDF)
+            $documentData = base64_decode($archivo->documento_data);
             
-            $fileName = 'expediente_' . $expediente->numero_expediente . '.pdf';
+            $fileName = $archivo->nombre_archivo;
             
-            return $pdf->download($fileName);
+            // Return the PDF document
+            return response($documentData)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'inline; filename="' . $fileName . '"');
+                
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'Error al generar el documento PDF',
+                'error' => 'Error al recuperar el documento',
                 'message' => $e->getMessage()
             ], 500);
         }

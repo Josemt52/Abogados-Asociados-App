@@ -72,17 +72,32 @@ const Table: React.FC<TableProps> = ({
                   } transition-colors`}
                   onClick={() => onRowClick?.(row)}
                 >
-                  {columns.map((column) => (
-                    <td 
-                      key={column.key}
-                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
-                    >
-                      {column.render 
-                        ? column.render(row[column.key], row)
-                        : row[column.key]
-                      }
-                    </td>
-                  ))}
+                  {columns.map((column) => {
+                    const cellValue = column.render 
+                      ? column.render(row[column.key], row)
+                      : row[column.key];
+                    
+                    const isTextColumn = !column.render && typeof cellValue === 'string';
+                    
+                    return (
+                      <td 
+                        key={column.key}
+                        className="px-6 py-4 text-sm text-gray-900"
+                        style={{ maxWidth: '200px' }}
+                      >
+                        {isTextColumn ? (
+                          <div 
+                            className="truncate" 
+                            title={cellValue as string}
+                          >
+                            {cellValue}
+                          </div>
+                        ) : (
+                          cellValue
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))
             )}

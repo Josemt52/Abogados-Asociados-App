@@ -27,12 +27,18 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [tieneDocumento, setTieneDocumento] = useState(false);
+  const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.numero.trim()) {
       newErrors.numero = 'El número de expediente es obligatorio';
+    }
+
+    if (tieneDocumento && !archivoSeleccionado) {
+      newErrors.archivo = 'Debe seleccionar un archivo';
     }
 
     setErrors(newErrors);
@@ -47,18 +53,44 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
     }
 
     setLoading(true);
+    let createdExpedienteId: number | null = null;
 
     try {
       if (expediente?.id) {
         await expedientesAPI.update(expediente.id, formData);
         toast.success('Expediente actualizado correctamente');
+        onSuccess();
       } else {
-        await expedientesAPI.create(formData);
-        toast.success('Expediente creado correctamente');
+        // Crear expediente
+        const newExpediente = await expedientesAPI.create(formData);
+        createdExpedienteId = newExpediente.id;
+        
+        try {
+          if (tieneDocumento && archivoSeleccionado) {
+            // Si tiene documento existente, subirlo
+            await expedientesAPI.uploadFile(newExpediente.id, archivoSeleccionado);
+            toast.success('Expediente creado y documento subido correctamente');
+          } else {
+            // Si no tiene documento, generar uno automáticamente
+            const wordBlob = await expedientesAPI.generateWord(newExpediente.id);
+            const wordFile = new File([wordBlob], `${formData.numero}.docx`, {
+              type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            });
+            await expedientesAPI.uploadFile(newExpediente.id, wordFile);
+            toast.success('Expediente creado y documento generado correctamente');
+          }
+          onSuccess();
+        } catch (docError) {
+          // Si falla la subida/generación del documento, eliminar el expediente creado
+          console.error('Error con documento, eliminando expediente:', docError);
+          await expedientesAPI.delete(newExpediente.id);
+          toast.error('Error al procesar el documento. El expediente no fue creado.');
+          throw docError;
+        }
       }
-      onSuccess();
     } catch (error) {
       // Error handling is done by the API interceptor
+      console.error('Error en handleSubmit:', error);
     } finally {
       setLoading(false);
     }
@@ -71,6 +103,16 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setArchivoSeleccionado(file);
+      if (errors.archivo) {
+        setErrors(prev => ({ ...prev, archivo: '' }));
+      }
     }
   };
 
@@ -202,6 +244,70 @@ const ExpedienteForm: React.FC<ExpedienteFormProps> = ({
           />
         </div>
       </div>
+
+      {/* Checkbox para documento existente */}
+      {!expediente?.id && (
+        <div className="border-t border-gray-200 pt-6">
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                id="tieneDocumento"
+                type="checkbox"
+                checked={tieneDocumento}
+                onChange={(e) => {
+                  setTieneDocumento(e.target.checked);
+                  if (!e.target.checked) {
+                    setArchivoSeleccionado(null);
+                    setErrors(prev => ({ ...prev, archivo: '' }));
+                  }
+                }}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+            </div>
+            <div className="ml-3">
+              <label htmlFor="tieneDocumento" className="font-medium text-gray-700">
+                ¿Ya existe un documento del expediente?
+              </label>
+              <p className="text-sm text-gray-500">
+                Si marca esta opción, deberá subir el documento existente. Si no, se generará automáticamente.
+              </p>
+            </div>
+          </div>
+
+          {/* Campo de archivo condicional */}
+          {tieneDocumento && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Subir Documento *
+              </label>
+              <div className="mt-1 flex items-center">
+                <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                  <span className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    {archivoSeleccionado ? 'Cambiar archivo' : 'Seleccionar archivo'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleFileChange}
+                    className="sr-only"
+                  />
+                </label>
+                {archivoSeleccionado && (
+                  <span className="ml-3 text-sm text-gray-600">
+                    {archivoSeleccionado.name}
+                  </span>
+                )}
+              </div>
+              {errors.archivo && (
+                <p className="mt-1 text-sm text-red-600">{errors.archivo}</p>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Formatos permitidos: PDF, DOC, DOCX (máx. 10MB)
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
         <Button
