@@ -10,23 +10,28 @@ class UserSeeder extends Seeder
 {
     /**
      * Run the database seeds.
+     * Idempotent - can be run multiple times safely.
      */
     public function run(): void
     {
         // Crear usuario administrador por defecto
-        User::create([
-            'nombre' => 'Administrador',
-            'username' => 'admin',
-            'password' => Hash::make('admin123'),
-            'rol_id' => 1, // ADMIN
-        ]);
+        User::updateOrCreate(
+            ['username' => 'admin'],
+            [
+                'nombre' => 'Administrador',
+                'password' => Hash::make('admin123'),
+                'rol_id' => 1, // ADMIN
+            ]
+        );
 
         // Crear usuario normal de prueba
-        User::create([
-            'nombre' => 'Usuario Test',
-            'username' => 'usuario',
-            'password' => Hash::make('usuario123'),
-            'rol_id' => 2, // USUARIO
-        ]);
+        User::updateOrCreate(
+            ['username' => 'usuario'],
+            [
+                'nombre' => 'Usuario Test',
+                'password' => Hash::make('usuario123'),
+                'rol_id' => 2, // USUARIO
+            ]
+        );
     }
 }
