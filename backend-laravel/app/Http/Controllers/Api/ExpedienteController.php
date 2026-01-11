@@ -7,24 +7,46 @@ use App\Models\Expediente;
 use App\Models\Archivo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ExpedienteController extends Controller
 {
     /**
      * Display a listing of expedientes
+     * Optimizado: Solo devuelve metadatos, sin cargar archivos binarios
      */
     public function index()
     {
-        $expedientes = Expediente::all();
+        // Solo campos necesarios para el listado (sin relaciones pesadas)
+        $expedientes = Expediente::select([
+            'id',
+            'numero',
+            'materia',
+            'juzgado',
+            'especialista',
+            'tercero',
+            'demandado',
+            'demandante',
+            'estado',
+            'archivo',
+            'nombre_archivo',
+            'created_at',
+            'updated_at'
+        ])->get();
+        
         return response()->json($expedientes);
     }
 
     /**
      * Display the specified expediente
+     * Optimizado: Solo devuelve metadatos del archivo (nombre, tipo), NO los datos binarios
      */
     public function show($id)
     {
-        $expediente = Expediente::findOrFail($id);
+        // Cargar solo metadatos del archivo, no el contenido binario
+        $expediente = Expediente::with(['archivoData:id,expediente_id,nombre_archivo,tipo_archivo'])
+            ->findOrFail($id);
+            
         return response()->json($expediente);
     }
 
@@ -34,14 +56,14 @@ class ExpedienteController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'numero' => 'required|string|unique:expedientes,numero',
-            'materia' => 'nullable|string',
-            'juzgado' => 'nullable|string',
-            'especialista' => 'nullable|string',
-            'tercero' => 'nullable|string',
-            'demandado' => 'nullable|string',
-            'demandante' => 'nullable|string',
-            'estado' => 'nullable|string',
+            'numero' => 'required|string|max:100|unique:expedientes,numero',
+            'materia' => 'nullable|string|max:500',
+            'juzgado' => 'nullable|string|max:255',
+            'especialista' => 'nullable|string|max:255',
+            'tercero' => 'nullable|string|max:255',
+            'demandado' => 'nullable|string|max:255',
+            'demandante' => 'nullable|string|max:255',
+            'estado' => 'nullable|string|max:1000',
         ]);
 
         // Inicializar campos de archivo como false y null
@@ -49,6 +71,8 @@ class ExpedienteController extends Controller
         $validated['nombre_archivo'] = null;
 
         $expediente = Expediente::create($validated);
+        
+        Log::info("Expediente creado", ['numero' => $expediente->numero, 'id' => $expediente->id]);
 
         return response()->json($expediente, 201);
     }
@@ -61,21 +85,22 @@ class ExpedienteController extends Controller
         $expediente = Expediente::findOrFail($id);
 
         $validated = $request->validate([
-            'numero' => 'sometimes|string|unique:expedientes,numero,' . $id,
-            'materia' => 'nullable|string',
-            'juzgado' => 'nullable|string',
-            'especialista' => 'nullable|string',
-            'tercero' => 'nullable|string',
-            'demandado' => 'nullable|string',
-            'demandante' => 'nullable|string',
-            'estado' => 'nullable|string',
+            'numero' => 'sometimes|string|max:100|unique:expedientes,numero,' . $id,
+            'materia' => 'nullable|string|max:500',
+            'juzgado' => 'nullable|string|max:255',
+            'especialista' => 'nullable|string|max:255',
+            'tercero' => 'nullable|string|max:255',
+            'demandado' => 'nullable|string|max:255',
+            'demandante' => 'nullable|string|max:255',
+            'estado' => 'nullable|string|max:1000',
         ]);
 
         // Solo actualizar los campos presentes en la solicitud
         // NO actualizar 'archivo' ni 'nombre_archivo' desde el formulario
         // Estos campos se actualizan solo al subir archivo
+        // Excluir valores vacíos para evitar sobrescritura accidental
         foreach ($validated as $key => $value) {
-            if ($value !== null) {
+            if ($value !== null && $value !== '') {
                 $expediente->$key = $value;
             }
         }
@@ -92,15 +117,26 @@ class ExpedienteController extends Controller
     {
         $expediente = Expediente::findOrFail($id);
         
-        // Eliminar archivo asociado si existe
-        $archivo = Archivo::where('expediente_id', $id)->first();
-        if ($archivo) {
-            $archivo->delete();
-        }
-        
-        $expediente->delete();
+        DB::beginTransaction();
+        try {
+            // Eliminar archivo asociado si existe
+            $archivo = Archivo::where('expediente_id', $id)->first();
+            if ($archivo) {
+                $archivo->delete();
+            }
+            
+            $numero = $expediente->numero; // Guardar para log
+            $expediente->delete();
+            
+            DB::commit();
+            Log::info("Expediente eliminado", ['numero' => $numero, 'id' => $id]);
 
-        return response()->json(null, 204);
+            return response()->json(null, 204);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error eliminando expediente", ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['error' => 'Error al eliminar el expediente'], 500);
+        }
     }
 
     /**
@@ -116,6 +152,9 @@ class ExpedienteController extends Controller
         $expediente = Expediente::findOrFail($id);
         $file = $request->file('file');
 
+        // Usar transacción para asegurar consistencia de datos
+        DB::beginTransaction();
+        
         try {
             $mimeType = $file->getClientMimeType();
             $fileName = $file->getClientOriginalName();
@@ -164,9 +203,13 @@ class ExpedienteController extends Controller
             $expediente->nombre_archivo = $fileName;
             $expediente->save();
 
+            DB::commit();
+            Log::info("Archivo subido exitosamente", ['expediente_id' => $id, 'archivo' => $fileName]);
+            
             return response()->json($expediente);
             
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Error uploading file: ' . $e->getMessage());
             return response()->json(['error' => 'Error al subir el archivo: ' . $e->getMessage()], 500);
         }

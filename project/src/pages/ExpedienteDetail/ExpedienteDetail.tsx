@@ -262,8 +262,9 @@ const ExpedienteDetail: React.FC = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Estado Actual</h2>
               <div 
                 className="prose max-w-none text-sm text-gray-700 bg-gray-50 p-4 rounded-lg"
-                dangerouslySetInnerHTML={{ __html: expediente.estado }}
-              />
+              >
+                {expediente.estado}
+              </div>
             </div>
           )}
 

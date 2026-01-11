@@ -16,8 +16,8 @@ use App\Http\Controllers\Api\DocumentoController;
 */
 
 // Public routes
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/contacto', [ContactController::class, 'store']);
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1'); // 5 intentos por minuto
+Route::post('/contacto', [ContactController::class, 'store'])->middleware('throttle:10,1'); // 10 mensajes por minuto
 
 // Protected routes (require JWT)
 Route::middleware('auth:api')->group(function () {
