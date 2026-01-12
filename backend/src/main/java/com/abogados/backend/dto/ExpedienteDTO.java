@@ -1,0 +1,40 @@
+package com.abogados.backend.dto;
+
+public class ExpedienteDTO {
+    private Integer id;
+    private String numero;
+    private String materia;
+    private String juzgado;
+    private String especialista;
+    private String tercero;
+    private String demandado;
+    private String demandante;
+    private String estado;
+    private Boolean archivo;
+    private String nombreArchivo;
+
+    public ExpedienteDTO() {}
+
+    public Integer getId() { return id; }
+    public void setId(Integer id) { this.id = id; }
+    public String getNumero() { return numero; }
+    public void setNumero(String numero) { this.numero = numero; }
+    public String getMateria() { return materia; }
+    public void setMateria(String materia) { this.materia = materia; }
+    public String getJuzgado() { return juzgado; }
+    public void setJuzgado(String juzgado) { this.juzgado = juzgado; }
+    public String getEspecialista() { return especialista; }
+    public void setEspecialista(String especialista) { this.especialista = especialista; }
+    public String getTercero() { return tercero; }
+    public void setTercero(String tercero) { this.tercero = tercero; }
+    public String getDemandado() { return demandado; }
+    public void setDemandado(String demandado) { this.demandado = demandado; }
+    public String getDemandante() { return demandante; }
+    public void setDemandante(String demandante) { this.demandante = demandante; }
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+    public Boolean getArchivo() { return archivo; }
+    public void setArchivo(Boolean archivo) { this.archivo = archivo; }
+    public String getNombreArchivo() { return nombreArchivo; }
+    public void setNombreArchivo(String nombreArchivo) { this.nombreArchivo = nombreArchivo; }
+}
