@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Edit, Trash2, UserPlus, Shield, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useFetch } from '../../hooks/useFetch';
@@ -27,6 +28,7 @@ interface EditUserData {
 
 const Usuarios: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredUsuarios, setFilteredUsuarios] = useState<User[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -237,7 +239,7 @@ const Usuarios: React.FC = () => {
         <Button
           variant="primary"
           icon={<UserPlus className="h-4 w-4" />}
-          onClick={() => window.location.href = '/usuarios/registrar'}
+          onClick={() => navigate('/usuarios/registrar')}
         >
           Nuevo Usuario
         </Button>
