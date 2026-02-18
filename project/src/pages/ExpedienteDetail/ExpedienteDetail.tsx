@@ -39,7 +39,7 @@ const ExpedienteDetail: React.FC = () => {
     [id]
   );
 
-  const { generateWord, generatePDF, isGenerating } = useDocumentGeneration();
+  const { generatePDF, isGenerating } = useDocumentGeneration();
 
   if (!id) {
     navigate('/expedientes');
@@ -81,10 +81,6 @@ const ExpedienteDetail: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGenerateWord = async () => {
-    await generateWord(id, expediente?.numero);
   };
 
   const handleGeneratePDF = async () => {
@@ -287,15 +283,7 @@ const ExpedienteDetail: React.FC = () => {
                   Descargar Archivo
                 </Button>
               )}
-              <Button
-                variant="outline"
-                icon={<FileText className="h-4 w-4" />}
-                onClick={handleGenerateWord}
-                loading={isGenerating}
-                className="w-full justify-start"
-              >
-                Generar Word
-              </Button>
+              
               <Button
                 variant="outline"
                 icon={<File className="h-4 w-4" />}

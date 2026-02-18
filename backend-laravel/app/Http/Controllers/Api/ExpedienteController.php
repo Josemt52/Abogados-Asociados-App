@@ -8,6 +8,7 @@ use App\Models\Archivo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 
 class ExpedienteController extends Controller
 {
@@ -160,35 +161,12 @@ class ExpedienteController extends Controller
             $fileName = $file->getClientOriginalName();
             $documentoData = null;
             
-            // If file is Word, convert to PDF
-            if (in_array($mimeType, [
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/msword'
-            ])) {
-                // Load Word document
-                $phpWord = \PhpOffice\PhpWord\IOFactory::load($file->getRealPath());
-                $htmlWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'HTML');
-                
-                $tempHtmlPath = storage_path('app/temp/' . uniqid() . '.html');
-                $htmlWriter->save($tempHtmlPath);
-                
-                $htmlContent = file_get_contents($tempHtmlPath);
-                
-                // Convert to PDF
-                $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($htmlContent);
-                $pdfContent = $pdf->output();
-                
-                // Clean up temp file
-                @unlink($tempHtmlPath);
-                
-                // Store as PDF
-                $documentoData = base64_encode($pdfContent);
-                $mimeType = 'application/pdf';
-                $fileName = preg_replace('/\.(docx?|DOCX?)$/', '.pdf', $fileName);
-            } else {
-                // If already PDF, store as-is
-                $documentoData = base64_encode(file_get_contents($file->getRealPath()));
-            }
+            // Store the original uploaded file as-is (do not force conversion on upload)
+            // We will generate PDF previews on demand via the DocumentoController when required.
+            $documentoData = base64_encode(file_get_contents($file->getRealPath()));
+            // Keep original mime type and file name
+            $mimeType = $file->getClientMimeType();
+            $fileName = $file->getClientOriginalName();
 
             // Buscar archivo existente o crear nuevo
             $archivo = Archivo::firstOrNew(['expediente_id' => $id]);

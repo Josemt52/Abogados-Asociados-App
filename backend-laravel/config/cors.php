@@ -20,7 +20,8 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'https://gestor.abogadosyasociados.net.pe', 'http://localhost:5173',
+        'https://gestor.abogadosyasociados.net.pe',
+        'http://localhost:5173',
         'http://localhost:3000',
     ],
 
@@ -28,10 +29,10 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['Authorization'],
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];
