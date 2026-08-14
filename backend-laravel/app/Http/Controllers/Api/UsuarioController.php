@@ -16,7 +16,7 @@ class UsuarioController extends Controller
     public function index()
     {
         $usuarios = User::with('rol')->get();
-        
+
         return response()->json($usuarios);
     }
 
@@ -39,7 +39,7 @@ class UsuarioController extends Controller
 
         return response()->json([
             'message' => 'Usuario creado exitosamente',
-            'usuario' => $usuario
+            'usuario' => $usuario,
         ], 201);
     }
 
@@ -49,7 +49,7 @@ class UsuarioController extends Controller
     public function show(string $id)
     {
         $usuario = User::with('rol')->findOrFail($id);
-        
+
         return response()->json($usuario);
     }
 
@@ -67,7 +67,7 @@ class UsuarioController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('users')->ignore($usuario->id)
+                Rule::unique('users')->ignore($usuario->id),
             ],
             'password' => 'sometimes|nullable|string|min:6',
             'rol_id' => 'sometimes|required|exists:roles,id',
@@ -82,7 +82,7 @@ class UsuarioController extends Controller
 
         return response()->json([
             'message' => 'Usuario actualizado exitosamente',
-            'usuario' => $usuario
+            'usuario' => $usuario,
         ]);
     }
 
@@ -92,20 +92,20 @@ class UsuarioController extends Controller
     public function destroy(string $id)
     {
         $usuario = User::findOrFail($id);
-        
+
         // Evitar que el usuario se elimine a sí mismo
         /** @var \App\Models\User|null $currentUser */
-        $currentUser = auth()->user();
+        $currentUser = auth('api')->user();
         if ($currentUser && $usuario->id == $currentUser->id) {
             return response()->json([
-                'error' => 'No puedes eliminar tu propio usuario'
+                'error' => 'No puedes eliminar tu propio usuario',
             ], 400);
         }
 
         $usuario->delete();
 
         return response()->json([
-            'message' => 'Usuario eliminado exitosamente'
+            'message' => 'Usuario eliminado exitosamente',
         ]);
     }
 }

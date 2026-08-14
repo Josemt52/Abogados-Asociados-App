@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -16,12 +15,12 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        try {
-            $request->validate([
-                'username' => 'required|string',
-                'password' => 'required|string',
-            ]);
+        $request->validate([
+            'username' => 'required|string',
+            'password' => 'required|string',
+        ]);
 
+        try {
             Log::info('Intento de login', ['username' => $request->username]);
 
             // Find user by username
@@ -29,35 +28,39 @@ class AuthController extends Controller
                 ->with('rol')
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 Log::warning('Usuario no encontrado', ['username' => $request->username]);
+
                 return response()->json([
-                    'message' => 'Credenciales inválidas'
+                    'message' => 'Credenciales inválidas',
                 ], 401);
             }
 
-            if (!Hash::check($request->password, $user->password)) {
+            if (! Hash::check($request->password, $user->password)) {
                 Log::warning('Contraseña incorrecta', ['username' => $request->username]);
+
                 return response()->json([
-                    'message' => 'Credenciales inválidas'
+                    'message' => 'Credenciales inválidas',
                 ], 401);
             }
 
             // Verify JWT configuration
-            if (!config('jwt.secret')) {
+            if (! config('jwt.secret')) {
                 Log::error('JWT_SECRET no configurado');
+
                 return response()->json([
-                    'message' => 'Error de configuración del servidor'
+                    'message' => 'Error de configuración del servidor',
                 ], 500);
             }
 
             // Generate JWT token
             $token = auth('api')->login($user);
 
-            if (!$token) {
+            if (! $token) {
                 Log::error('No se pudo generar el token JWT', ['user_id' => $user->id]);
+
                 return response()->json([
-                    'message' => 'Error al generar el token de autenticación'
+                    'message' => 'Error al generar el token de autenticación',
                 ], 500);
             }
 
@@ -70,14 +73,14 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Error en login: ' . $e->getMessage(), [
+            Log::error('Error en login: '.$e->getMessage(), [
                 'exception' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'message' => 'Error en el proceso de autenticación',
-                'error' => config('app.debug') ? $e->getMessage() : 'Error interno del servidor'
+                'error' => config('app.debug') ? $e->getMessage() : 'Error interno del servidor',
             ], 500);
         }
     }
@@ -98,7 +101,7 @@ class AuthController extends Controller
         auth('api')->logout();
 
         return response()->json([
-            'message' => 'Sesión cerrada exitosamente'
+            'message' => 'Sesión cerrada exitosamente',
         ]);
     }
 
