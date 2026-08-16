@@ -31,4 +31,9 @@ return [
         ],
     ],
 
+    'libreoffice' => [
+        'binary' => env('LIBREOFFICE_BINARY'),
+        'timeout' => env('LIBREOFFICE_TIMEOUT', 120),
+    ],
+
 ];

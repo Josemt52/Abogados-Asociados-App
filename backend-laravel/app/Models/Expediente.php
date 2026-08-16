@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Expediente extends Model
 {
     protected $table = 'expedientes';
-    
+
     protected $fillable = [
         'numero',
         'materia',
@@ -20,10 +21,14 @@ class Expediente extends Model
         'estado',
         'archivo',
         'nombre_archivo',
+        'ultima_resolucion',
+        'resolucion_detectada',
     ];
 
     protected $casts = [
         'archivo' => 'boolean',
+        'ultima_resolucion' => 'integer',
+        'resolucion_detectada' => 'integer',
     ];
 
     /**
@@ -32,6 +37,14 @@ class Expediente extends Model
     public function archivoData(): HasOne
     {
         return $this->hasOne(Archivo::class, 'expediente_id');
+    }
+
+    /**
+     * Get the resolution history associated with this expediente.
+     */
+    public function resoluciones(): HasMany
+    {
+        return $this->hasMany(Resolucion::class, 'expediente_id');
     }
 
     /**

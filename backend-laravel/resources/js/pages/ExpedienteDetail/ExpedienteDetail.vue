@@ -3,21 +3,26 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
     ArrowLeft,
+    CheckCircle2,
     Clock,
     Download,
     Edit,
     File as FileIcon,
+    FilePlus2,
     Scale,
     Trash2,
     Upload,
     User,
 } from '@lucide/vue';
-import { expedientesAPI, type Expediente } from '@/api';
+import { expedientesAPI, type Expediente, type Resolucion } from '@/api';
 import ExpedienteForm from '@/components/ExpedienteForm/ExpedienteForm.vue';
 import FileUploader from '@/components/FileUploader/FileUploader.vue';
 import Button from '@/components/UI/Button.vue';
 import Modal from '@/components/UI/Modal.vue';
 import { useToast } from '@/composables/useToast';
+import { getApiErrorMessage } from '@/utils/apiError';
+import { downloadBlob } from '@/utils/fileDownload';
+import { isValidPdfBlob } from '@/utils/pdf';
 
 const route = useRoute();
 const router = useRouter();
@@ -27,18 +32,58 @@ const showEditModal = ref(false);
 const showUploadModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showUpdateStatusModal = ref(false);
+const showInitialResolutionModal = ref(false);
+const showCompleteResolutionModal = ref(false);
 const statusText = ref('');
 const statusLoading = ref(false);
+const initialResolutionNumber = ref(0);
+const initialResolutionLoading = ref(false);
+const generatingResolution = ref(false);
+const completingResolution = ref(false);
+const downloadingResolutionId = ref<number | null>(null);
+const completionResolutionId = ref<number | null>(null);
+const completionResolutionNumber = ref<number | null>(null);
+const hasPromptedInitialResolution = ref(false);
 const loading = ref(false);
 const isGenerating = ref(false);
 const expediente = ref<Expediente | null>(null);
+const resoluciones = ref<Resolucion[]>([]);
 const expedienteLoading = ref(true);
+const resolucionesLoading = ref(true);
+const resolucionesError = ref<string | null>(null);
+let refetchRequestId = 0;
 
 const rawId = computed(() => {
     const routeId = route.params.id;
     return Array.isArray(routeId) ? routeId[0] : routeId;
 });
 const expedienteId = computed(() => Number(rawId.value));
+const sortedResoluciones = computed(() =>
+    [...resoluciones.value].sort((a, b) => b.numero - a.numero),
+);
+const pendingResolution = computed(
+    () => sortedResoluciones.value.find((resolucion) => resolucion.estado === 'pendiente') ?? null,
+);
+const resolutionHistoryReady = computed(
+    () =>
+        expediente.value !== null &&
+        !resolucionesLoading.value &&
+        resolucionesError.value === null,
+);
+const nextResolutionNumber = computed(() => (expediente.value?.ultima_resolucion ?? 0) + 1);
+const lastResolutionLabel = computed(() => {
+    if (!resolutionHistoryReady.value) {
+        return resolucionesLoading.value ? 'Cargando' : 'No disponible';
+    }
+
+    const numero = expediente.value?.ultima_resolucion;
+
+    if (numero == null) {
+        return 'Por confirmar';
+    }
+
+    return numero === 0 ? 'Ninguna' : String(numero);
+});
 const formattedUpdatedAt = computed(() => {
     if (!expediente.value?.updated_at) {
         return 'Sin fecha';
@@ -48,33 +93,96 @@ const formattedUpdatedAt = computed(() => {
     return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleDateString('es-PE');
 });
 
+const isActiveRefetch = (requestId: number, requestedRawId: string): boolean =>
+    requestId === refetchRequestId && rawId.value === requestedRawId;
+
 const refetch = async (): Promise<void> => {
-    if (!rawId.value) {
+    const requestedRawId = rawId.value;
+    const requestId = ++refetchRequestId;
+
+    if (!requestedRawId) {
         expediente.value = null;
+        resoluciones.value = [];
+        resolucionesError.value = null;
         expedienteLoading.value = false;
+        resolucionesLoading.value = false;
+        return;
+    }
+
+    const requestedExpedienteId = Number(requestedRawId);
+
+    if (!Number.isInteger(requestedExpedienteId) || requestedExpedienteId < 1) {
+        expediente.value = null;
+        resoluciones.value = [];
+        resolucionesError.value = null;
+        expedienteLoading.value = false;
+        resolucionesLoading.value = false;
         return;
     }
 
     expedienteLoading.value = true;
+    resolucionesLoading.value = true;
+    resolucionesError.value = null;
 
     try {
-        expediente.value = await expedientesAPI.getById(expedienteId.value);
-    } catch {
-        expediente.value = null;
-    } finally {
-        expedienteLoading.value = false;
-    }
-};
+        const [expedienteResult, resolucionesResult] = await Promise.allSettled([
+            expedientesAPI.getById(requestedExpedienteId),
+            expedientesAPI.getResoluciones(requestedExpedienteId),
+        ]);
 
-const downloadBlob = (blob: Blob, filename: string): void => {
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+        if (!isActiveRefetch(requestId, requestedRawId)) {
+            return;
+        }
+
+        if (expedienteResult.status === 'rejected') {
+            expediente.value = null;
+            resoluciones.value = [];
+            resolucionesError.value = null;
+            return;
+        }
+
+        if (resolucionesResult.status === 'rejected') {
+            expediente.value = expedienteResult.value;
+            resoluciones.value = [];
+            const message = await getApiErrorMessage(
+                resolucionesResult.reason,
+                'No se pudo cargar el historial de resoluciones.',
+            );
+
+            if (!isActiveRefetch(requestId, requestedRawId)) {
+                return;
+            }
+
+            resolucionesError.value = message;
+            showInitialResolutionModal.value = false;
+            showCompleteResolutionModal.value = false;
+            return;
+        }
+
+        const snapshot = resolucionesResult.value;
+        const expedienteResponse: Expediente = {
+            ...expedienteResult.value,
+            ultima_resolucion: snapshot.ultima_resolucion,
+            resolucion_detectada: snapshot.resolucion_detectada,
+        };
+        expediente.value = expedienteResponse;
+        resoluciones.value = snapshot.resoluciones;
+
+        if (
+            expedienteResponse.ultima_resolucion == null &&
+            !hasPromptedInitialResolution.value
+        ) {
+            const detected = Number(expedienteResponse.resolucion_detectada ?? 0);
+            initialResolutionNumber.value = Number.isInteger(detected) && detected >= 0 ? detected : 0;
+            hasPromptedInitialResolution.value = true;
+            showInitialResolutionModal.value = true;
+        }
+    } finally {
+        if (isActiveRefetch(requestId, requestedRawId)) {
+            expedienteLoading.value = false;
+            resolucionesLoading.value = false;
+        }
+    }
 };
 
 const handleFileUpload = async (
@@ -85,10 +193,13 @@ const handleFileUpload = async (
         await expedientesAPI.uploadFile(expedienteId.value, file, onProgress);
         toast.success('Archivo subido correctamente');
         showUploadModal.value = false;
+        hasPromptedInitialResolution.value = false;
         await refetch();
 
-        statusText.value = expediente.value?.estado || '';
-        showUpdateStatusModal.value = true;
+        if (expediente.value?.ultima_resolucion != null) {
+            statusText.value = expediente.value?.estado || '';
+            showUpdateStatusModal.value = true;
+        }
     } catch (error) {
         toast.error('Error al subir el archivo');
         throw error;
@@ -113,14 +224,148 @@ const handleGeneratePdf = async (): Promise<void> => {
     try {
         isGenerating.value = true;
         const blob = await expedientesAPI.generatePdf(expedienteId.value);
+
+        if (!(await isValidPdfBlob(blob))) {
+            throw new Error('El servidor no devolvió un PDF válido.');
+        }
+
         const filename = `expediente_${expediente.value?.numero || rawId.value}.pdf`;
         downloadBlob(blob, filename);
         toast.success('Documento PDF generado correctamente');
     } catch (error) {
-        toast.error('Error al generar documento PDF');
+        toast.error(await getApiErrorMessage(error, 'Error al generar documento PDF'));
         console.error(error);
     } finally {
         isGenerating.value = false;
+    }
+};
+
+const handleConfirmInitialResolution = async (): Promise<void> => {
+    if (!resolutionHistoryReady.value) {
+        toast.error('Primero vuelve a cargar el historial de resoluciones.');
+        return;
+    }
+
+    const numero = Number(initialResolutionNumber.value);
+
+    if (!Number.isInteger(numero) || numero < 0) {
+        toast.error('Ingrese un número de resolución válido. Use 0 si todavía no existe ninguna.');
+        return;
+    }
+
+    try {
+        initialResolutionLoading.value = true;
+        await expedientesAPI.confirmarResolucionInicial(expedienteId.value, numero);
+        showInitialResolutionModal.value = false;
+        toast.success(
+            numero === 0
+                ? 'El expediente quedó listo para crear su primera resolución.'
+                : `Última resolución confirmada: ${numero}.`,
+        );
+        await refetch();
+    } catch (error) {
+        console.error('Error confirming initial resolution', error);
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo confirmar el número de resolución.'),
+        );
+    } finally {
+        initialResolutionLoading.value = false;
+    }
+};
+
+const openPendingResolution = (resolucion: Resolucion): void => {
+    completionResolutionId.value = resolucion.id;
+    completionResolutionNumber.value = resolucion.numero;
+    showCompleteResolutionModal.value = true;
+};
+
+const handleGenerateNextResolution = async (): Promise<void> => {
+    if (!resolutionHistoryReady.value) {
+        toast.error('El historial de resoluciones no está disponible. Vuelve a intentarlo.');
+        return;
+    }
+
+    if (expediente.value?.ultima_resolucion == null) {
+        showInitialResolutionModal.value = true;
+        return;
+    }
+
+    try {
+        generatingResolution.value = true;
+        const plantilla = await expedientesAPI.generarSiguienteResolucion(expedienteId.value);
+        downloadBlob(plantilla.blob, plantilla.filename);
+
+        completionResolutionId.value = plantilla.resolucionId;
+        completionResolutionNumber.value = plantilla.numero;
+        showCompleteResolutionModal.value = true;
+        toast.success(`Plantilla de la resolución ${plantilla.numero} descargada.`);
+        await refetch();
+    } catch (error) {
+        console.error('Error generating next resolution', error);
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo generar la siguiente resolución.'),
+        );
+    } finally {
+        generatingResolution.value = false;
+    }
+};
+
+const handleCompleteResolution = async (
+    file: File,
+    onProgress?: (progress: number) => void,
+): Promise<void> => {
+    if (!resolutionHistoryReady.value) {
+        toast.error('Primero vuelve a cargar el historial de resoluciones.');
+        return;
+    }
+
+    if (completionResolutionId.value == null) {
+        toast.error('No se pudo identificar la resolución pendiente.');
+        return;
+    }
+
+    try {
+        completingResolution.value = true;
+        await expedientesAPI.completarResolucion(
+            expedienteId.value,
+            completionResolutionId.value,
+            file,
+            onProgress,
+        );
+        const completedNumber = completionResolutionNumber.value;
+        showCompleteResolutionModal.value = false;
+        completionResolutionId.value = null;
+        completionResolutionNumber.value = null;
+        toast.success(`Resolución ${completedNumber} incorporada al expediente.`);
+        await refetch();
+    } catch (error) {
+        console.error('Error completing resolution', error);
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo incorporar la resolución al expediente.'),
+        );
+        throw error;
+    } finally {
+        completingResolution.value = false;
+    }
+};
+
+const formatResolutionDate = (dateValue: string): string => {
+    const date = new Date(dateValue);
+    return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleDateString('es-PE');
+};
+
+const handleDownloadResolution = async (resolucion: Resolucion): Promise<void> => {
+    try {
+        downloadingResolutionId.value = resolucion.id;
+        const blob = await expedientesAPI.downloadResolucion(expedienteId.value, resolucion.id);
+        downloadBlob(blob, resolucion.nombre_archivo || `resolucion_${resolucion.numero}.docx`);
+        toast.success(`Resolución ${resolucion.numero} descargada.`);
+    } catch (error) {
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo descargar el documento de la resolución.'),
+        );
+    } finally {
+        downloadingResolutionId.value = null;
     }
 };
 
@@ -161,10 +406,14 @@ watch(
     rawId,
     (id) => {
         if (!id) {
+            refetchRequestId += 1;
             void router.push('/expedientes');
             return;
         }
 
+        hasPromptedInitialResolution.value = false;
+        showInitialResolutionModal.value = false;
+        showCompleteResolutionModal.value = false;
         void refetch();
     },
     { immediate: true },
@@ -205,11 +454,15 @@ watch(
                     </template>
                     Editar
                 </Button>
-                <Button variant="outline" @click="showUploadModal = true">
+                <Button
+                    v-if="resolutionHistoryReady && sortedResoluciones.length === 0"
+                    variant="outline"
+                    @click="showUploadModal = true"
+                >
                     <template #icon>
                         <Upload class="h-4 w-4" />
                     </template>
-                    Subir Archivo
+                    {{ expediente.archivo ? 'Reemplazar documento inicial' : 'Subir documento inicial' }}
                 </Button>
             </div>
         </div>
@@ -222,6 +475,9 @@ watch(
                 </span>
                 <span class="text-sm text-blue-700">
                     • Última actualización: {{ formattedUpdatedAt }}
+                </span>
+                <span class="text-sm font-medium text-blue-900">
+                    • Última resolución: {{ lastResolutionLabel }}
                 </span>
             </div>
         </div>
@@ -294,12 +550,159 @@ watch(
                         {{ expediente.estado }}
                     </div>
                 </div>
+
+                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                    <div class="mb-4 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-900">Historial de resoluciones</h2>
+                            <p class="text-sm text-gray-500">
+                                Documentos incorporados y resoluciones pendientes de completar.
+                            </p>
+                        </div>
+                        <span
+                            class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800"
+                        >
+                            Última: {{ lastResolutionLabel }}
+                        </span>
+                    </div>
+
+                    <div
+                        v-if="resolucionesLoading"
+                        class="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500"
+                    >
+                        Cargando historial de resoluciones...
+                    </div>
+
+                    <div
+                        v-else-if="resolucionesError"
+                        class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center"
+                    >
+                        <p class="font-medium text-red-800">No se pudo cargar el historial de resoluciones.</p>
+                        <p class="mt-1 text-sm text-red-700">{{ resolucionesError }}</p>
+                        <Button variant="outline" size="sm" class="mt-4" @click="refetch">
+                            Reintentar
+                        </Button>
+                    </div>
+
+                    <div v-else-if="sortedResoluciones.length" class="divide-y divide-gray-200">
+                        <div
+                            v-for="resolucion in sortedResoluciones"
+                            :key="resolucion.id"
+                            class="flex items-center justify-between py-4"
+                        >
+                            <div class="flex items-center space-x-3">
+                                <div
+                                    class="rounded-full p-2"
+                                    :class="
+                                        resolucion.estado === 'completada'
+                                            ? 'bg-green-100 text-green-700'
+                                            : resolucion.estado === 'base'
+                                              ? 'bg-blue-100 text-blue-700'
+                                              : 'bg-amber-100 text-amber-700'
+                                    "
+                                >
+                                    <CheckCircle2
+                                        v-if="resolucion.estado === 'completada'"
+                                        class="h-5 w-5"
+                                    />
+                                    <FileIcon v-else-if="resolucion.estado === 'base'" class="h-5 w-5" />
+                                    <Clock v-else class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900">
+                                        {{
+                                            resolucion.estado === 'base' && resolucion.numero === 0
+                                                ? 'Documento base (sin resoluciones)'
+                                                : `Resolución N.º ${resolucion.numero}`
+                                        }}
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        {{
+                                            resolucion.estado === 'completada'
+                                                ? resolucion.nombre_archivo || 'Documento incorporado'
+                                                : resolucion.estado === 'base'
+                                                  ? 'Documento original usado como base del expediente'
+                                                  : 'Pendiente de subir el Word terminado'
+                                        }}
+                                        •
+                                        {{
+                                            formatResolutionDate(
+                                                resolucion.completada_at || resolucion.created_at,
+                                            )
+                                        }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <Button
+                                    v-if="resolucion.estado === 'pendiente'"
+                                    variant="outline"
+                                    size="sm"
+                                    :loading="generatingResolution"
+                                    @click="handleGenerateNextResolution"
+                                >
+                                    <template #icon>
+                                        <Download class="h-4 w-4" />
+                                    </template>
+                                    Descargar plantilla
+                                </Button>
+                                <Button
+                                    v-else-if="resolucion.nombre_archivo"
+                                    variant="outline"
+                                    size="sm"
+                                    :loading="downloadingResolutionId === resolucion.id"
+                                    @click="handleDownloadResolution(resolucion)"
+                                >
+                                    <template #icon>
+                                        <Download class="h-4 w-4" />
+                                    </template>
+                                    Descargar
+                                </Button>
+                                <Button
+                                    v-if="resolucion.estado === 'pendiente'"
+                                    variant="outline"
+                                    size="sm"
+                                    @click="openPendingResolution(resolucion)"
+                                >
+                                    Subir documento
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-else class="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                        Todavía no hay resoluciones registradas individualmente.
+                    </div>
+                </div>
             </div>
 
             <div class="space-y-6">
                 <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                     <h3 class="mb-4 text-lg font-semibold text-gray-900">Acciones Rápidas</h3>
                     <div class="space-y-3">
+                        <Button
+                            variant="primary"
+                            :loading="generatingResolution"
+                            :disabled="!resolutionHistoryReady"
+                            class="w-full justify-start"
+                            @click="handleGenerateNextResolution"
+                        >
+                            <template #icon>
+                                <FilePlus2 class="h-4 w-4" />
+                            </template>
+                            <template v-if="resolucionesLoading">Cargando resoluciones...</template>
+                            <template v-else-if="resolucionesError">Historial no disponible</template>
+                            <template v-else-if="pendingResolution">
+                                Descargar plantilla {{ pendingResolution.numero }}
+                            </template>
+                            <template v-else-if="expediente.ultima_resolucion == null">
+                                Configurar resoluciones
+                            </template>
+                            <template v-else>
+                                Crear resolución {{ nextResolutionNumber }}
+                            </template>
+                        </Button>
+
                         <Button
                             v-if="expediente.archivo"
                             variant="outline"
@@ -371,6 +774,82 @@ watch(
                 accept=".pdf,.doc,.docx"
                 :loading="loading"
             />
+        </Modal>
+
+        <Modal
+            :open="showInitialResolutionModal"
+            title="Confirmar última resolución"
+            size="md"
+            @close="showInitialResolutionModal = false"
+        >
+            <div class="space-y-5">
+                <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                    <template v-if="expediente.resolucion_detectada != null">
+                        Detectamos que el documento llega hasta la resolución
+                        <strong>N.º {{ expediente.resolucion_detectada }}</strong>. Confirme el número o
+                        corríjalo antes de continuar.
+                    </template>
+                    <template v-else-if="expediente.archivo">
+                        No pudimos detectar con seguridad la última resolución del documento. Indique el número
+                        correcto para continuar la serie.
+                    </template>
+                    <template v-else>
+                        Este expediente todavía no tiene resoluciones. Mantenga el valor en 0 para que la primera
+                        plantilla sea la Resolución N.º 1.
+                    </template>
+                </div>
+
+                <div>
+                    <label for="initial-resolution" class="mb-1 block text-sm font-medium text-gray-700">
+                        Última resolución completada
+                    </label>
+                    <input
+                        id="initial-resolution"
+                        v-model.number="initialResolutionNumber"
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <p class="mt-1 text-xs text-gray-500">Use 0 si todavía no existe ninguna resolución.</p>
+                </div>
+
+                <div class="flex justify-end space-x-3">
+                    <Button variant="outline" @click="showInitialResolutionModal = false">Ahora no</Button>
+                    <Button
+                        variant="primary"
+                        :loading="initialResolutionLoading"
+                        @click="handleConfirmInitialResolution"
+                    >
+                        Confirmar número
+                    </Button>
+                </div>
+            </div>
+        </Modal>
+
+        <Modal
+            :open="showCompleteResolutionModal"
+            :title="`Completar Resolución N.º ${completionResolutionNumber ?? ''}`"
+            size="md"
+            @close="showCompleteResolutionModal = false"
+        >
+            <div class="space-y-5">
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    La plantilla ya fue descargada. Termine de redactarla y arrastre aquí el documento Word. El
+                    número del expediente se actualizará únicamente cuando la carga finalice correctamente.
+                </div>
+
+                <FileUploader
+                    :on-upload="handleCompleteResolution"
+                    accept=".doc,.docx"
+                    :loading="completingResolution || !resolutionHistoryReady"
+                />
+
+                <p class="text-xs text-gray-500">
+                    Conservaremos el documento de esta resolución en el historial y actualizaremos el expediente
+                    consolidado.
+                </p>
+            </div>
         </Modal>
 
         <Modal

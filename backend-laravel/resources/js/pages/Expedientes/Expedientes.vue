@@ -7,6 +7,10 @@ import ExpedienteForm from '@/components/ExpedienteForm/ExpedienteForm.vue';
 import Button from '@/components/UI/Button.vue';
 import Modal from '@/components/UI/Modal.vue';
 import Table from '@/components/UI/Table.vue';
+import { getApiErrorMessage } from '@/utils/apiError';
+import { isValidPdfBlob, pdfFilename } from '@/utils/pdf';
+
+type ViewerState = 'idle' | 'loading' | 'pdf' | 'download' | 'error';
 
 const router = useRouter();
 const searchTerm = ref('');
@@ -17,11 +21,12 @@ const loading = ref(true);
 const pageSize = 10;
 
 const showViewerModal = ref(false);
-const viewerLoading = ref(false);
+const viewerState = ref<ViewerState>('idle');
 const viewerBlobUrl = ref<string | null>(null);
 const viewerMessage = ref<string | null>(null);
-const viewerMimeType = ref<string | null>(null);
+const viewerFilename = ref('documento');
 const selectedViewerRow = ref<Expediente | null>(null);
+let viewerRequestId = 0;
 
 const columns = [
     { key: 'numero', label: 'Número' },
@@ -83,70 +88,127 @@ const handleSearch = (): void => {
     currentPage.value = 1;
 };
 
-const handleCreateSuccess = (): void => {
+const handleCreateSuccess = (expediente: Expediente): void => {
     showCreateModal.value = false;
-    void refetch();
+    void router.push(`/expedientes/${expediente.id}`);
 };
 
-const handleViewClick = async (row: Expediente): Promise<void> => {
+const revokeViewerUrl = (): void => {
     if (viewerBlobUrl.value) {
         URL.revokeObjectURL(viewerBlobUrl.value);
+        viewerBlobUrl.value = null;
     }
+};
+
+const setViewerBlob = (blob: Blob, filename: string, state: 'pdf' | 'download'): void => {
+    revokeViewerUrl();
+    viewerBlobUrl.value = URL.createObjectURL(blob);
+    viewerFilename.value = filename;
+    viewerState.value = state;
+};
+
+const isActiveViewerRequest = (requestId: number): boolean =>
+    requestId === viewerRequestId && showViewerModal.value;
+
+const handleViewClick = async (row: Expediente): Promise<void> => {
+    const requestId = ++viewerRequestId;
+    revokeViewerUrl();
 
     selectedViewerRow.value = row;
-    viewerBlobUrl.value = null;
-    viewerMimeType.value = null;
     viewerMessage.value = null;
+    viewerFilename.value = row.nombre_archivo || 'documento';
+    viewerState.value = 'idle';
     showViewerModal.value = true;
 
     if (!row.archivo) {
         viewerMessage.value = 'Este expediente no tiene un documento asociado todavía.';
+        viewerState.value = 'error';
         return;
     }
 
     try {
-        viewerLoading.value = true;
+        viewerState.value = 'loading';
         viewerMessage.value = null;
 
         const originalBlob = await expedientesAPI.downloadFile(row.id);
-        const originalType = originalBlob.type || '';
+        if (!isActiveViewerRequest(requestId)) {
+            return;
+        }
 
-        if (originalType.includes('pdf')) {
-            viewerBlobUrl.value = URL.createObjectURL(originalBlob);
-            viewerMimeType.value = 'application/pdf';
+        if (await isValidPdfBlob(originalBlob)) {
+            if (!isActiveViewerRequest(requestId)) {
+                return;
+            }
+
+            setViewerBlob(
+                originalBlob,
+                pdfFilename(row.nombre_archivo, `expediente_${row.numero}`),
+                'pdf',
+            );
             return;
         }
 
         try {
             const pdfBlob = await expedientesAPI.generatePdf(row.id);
-            viewerBlobUrl.value = URL.createObjectURL(pdfBlob);
-            viewerMimeType.value = 'application/pdf';
+            if (!isActiveViewerRequest(requestId)) {
+                return;
+            }
+
+            if (!(await isValidPdfBlob(pdfBlob))) {
+                throw new Error('La conversión no devolvió un archivo PDF válido.');
+            }
+
+            if (!isActiveViewerRequest(requestId)) {
+                return;
+            }
+
+            setViewerBlob(
+                pdfBlob,
+                pdfFilename(row.nombre_archivo, `expediente_${row.numero}`),
+                'pdf',
+            );
         } catch (conversionError) {
             console.warn('PDF conversion failed, falling back to download', conversionError);
-            viewerBlobUrl.value = URL.createObjectURL(originalBlob);
-            viewerMimeType.value = originalType || null;
-            viewerMessage.value =
-                'No se pudo convertir el documento a PDF. Puede descargar el archivo original.';
+            if (!isActiveViewerRequest(requestId)) {
+                return;
+            }
+
+            const message = await getApiErrorMessage(
+                conversionError,
+                'No se pudo convertir el documento a PDF.',
+            );
+            if (!isActiveViewerRequest(requestId)) {
+                return;
+            }
+
+            viewerMessage.value = `${message} Puede descargar el archivo original.`;
+            setViewerBlob(originalBlob, row.nombre_archivo || 'documento', 'download');
         }
     } catch (error) {
         console.error('Error fetching expediente PDF', error);
-        viewerMessage.value = 'Error al descargar el documento. Intente nuevamente.';
-        viewerBlobUrl.value = null;
-    } finally {
-        viewerLoading.value = false;
+        if (!isActiveViewerRequest(requestId)) {
+            return;
+        }
+
+        const message = await getApiErrorMessage(
+            error,
+            'Error al descargar el documento. Intente nuevamente.',
+        );
+        if (!isActiveViewerRequest(requestId)) {
+            return;
+        }
+
+        viewerMessage.value = message;
+        viewerState.value = 'error';
     }
 };
 
 const closeViewerModal = (): void => {
+    viewerRequestId += 1;
     showViewerModal.value = false;
-
-    if (viewerBlobUrl.value) {
-        URL.revokeObjectURL(viewerBlobUrl.value);
-    }
-
-    viewerBlobUrl.value = null;
+    revokeViewerUrl();
     viewerMessage.value = null;
-    viewerMimeType.value = null;
+    viewerState.value = 'idle';
     selectedViewerRow.value = null;
 };
 
@@ -165,9 +227,8 @@ watch(totalPages, (pages) => {
 });
 
 onBeforeUnmount(() => {
-    if (viewerBlobUrl.value) {
-        URL.revokeObjectURL(viewerBlobUrl.value);
-    }
+    viewerRequestId += 1;
+    revokeViewerUrl();
 });
 </script>
 
@@ -284,15 +345,13 @@ onBeforeUnmount(() => {
         <Modal :open="showViewerModal" :title="viewerTitle" size="full" @close="closeViewerModal">
             <div class="flex h-[85vh] flex-col">
                 <div
-                    v-if="!viewerLoading && viewerBlobUrl"
+                    v-if="viewerState !== 'loading' && viewerBlobUrl"
                     class="flex items-center justify-between border-b bg-gray-50 px-4 py-3"
                 >
-                    <div class="text-sm text-gray-600">
-                        {{ selectedViewerRow?.nombre_archivo || 'documento.pdf' }}
-                    </div>
+                    <div class="text-sm text-gray-600">{{ viewerFilename }}</div>
                     <a
                         :href="viewerBlobUrl"
-                        :download="selectedViewerRow?.nombre_archivo || 'documento.pdf'"
+                        :download="viewerFilename"
                         class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700"
                     >
                         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -308,7 +367,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="flex-1 overflow-hidden">
-                    <div v-if="viewerLoading" class="flex h-full items-center justify-center">
+                    <div v-if="viewerState === 'loading'" class="flex h-full items-center justify-center">
                         <div class="text-center">
                             <div
                                 class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"
@@ -317,47 +376,15 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
 
-                    <div
-                        v-if="!viewerLoading && viewerMessage"
-                        class="flex h-full items-center justify-center"
-                    >
-                        <div class="p-6 text-center">
-                            <svg
-                                class="mx-auto mb-4 h-16 w-16 text-gray-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                />
-                            </svg>
-                            <p class="text-gray-700">{{ viewerMessage }}</p>
-                        </div>
-                    </div>
-
                     <iframe
-                        v-if="
-                            !viewerLoading &&
-                            viewerBlobUrl &&
-                            viewerMimeType &&
-                            viewerMimeType.includes('pdf')
-                        "
+                        v-else-if="viewerState === 'pdf' && viewerBlobUrl"
                         :src="viewerBlobUrl"
                         title="Documento PDF"
                         class="h-full w-full border-0"
                     ></iframe>
 
                     <div
-                        v-if="
-                            !viewerLoading &&
-                            viewerBlobUrl &&
-                            viewerMimeType &&
-                            !viewerMimeType.includes('pdf')
-                        "
+                        v-else-if="viewerState === 'download' && viewerBlobUrl"
                         class="flex h-full items-center justify-center"
                     >
                         <div class="p-6 text-center">
@@ -374,30 +401,34 @@ onBeforeUnmount(() => {
                                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                                 />
                             </svg>
-                            <p class="mb-4 font-medium text-gray-700">El archivo asociado no es un PDF</p>
-                            <p class="mb-4 text-sm text-gray-500">
-                                Este tipo de archivo no puede previsualizarse en el navegador
-                            </p>
+                            <p class="mb-4 font-medium text-gray-700">No se pudo mostrar la vista previa</p>
+                            <p class="mb-4 text-sm text-gray-500">{{ viewerMessage }}</p>
                             <a
                                 :href="viewerBlobUrl"
-                                :download="selectedViewerRow?.nombre_archivo || 'documento'"
+                                :download="viewerFilename"
                                 class="inline-flex items-center rounded-md bg-blue-600 px-6 py-3 text-white transition-colors hover:bg-blue-700"
                             >
-                                <svg
-                                    class="mr-2 h-5 w-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                    />
-                                </svg>
-                                Descargar archivo
+                                Descargar archivo original
                             </a>
+                        </div>
+                    </div>
+
+                    <div v-else class="flex h-full items-center justify-center">
+                        <div class="p-6 text-center">
+                            <svg
+                                class="mx-auto mb-4 h-16 w-16 text-gray-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                            </svg>
+                            <p class="text-gray-700">{{ viewerMessage }}</p>
                         </div>
                     </div>
                 </div>

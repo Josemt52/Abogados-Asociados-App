@@ -6,7 +6,7 @@ export const downloadBlob = (blob: Blob, filename: string): void => {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    window.URL.revokeObjectURL(url);
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 };
 
 export const validateFileSize = (file: File, maxSize: number): boolean => file.size <= maxSize;

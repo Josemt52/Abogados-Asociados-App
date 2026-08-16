@@ -20,7 +20,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    success: [];
+    success: [expediente: Expediente];
     cancel: [];
 }>();
 
@@ -74,34 +74,31 @@ const handleSubmit = async (): Promise<void> => {
 
     try {
         if (props.expediente?.id) {
-            await expedientesAPI.update(props.expediente.id, { ...formData });
+            const updatedExpediente = await expedientesAPI.update(props.expediente.id, { ...formData });
             toast.success('Expediente actualizado correctamente');
-            emit('success');
+            emit('success', updatedExpediente);
             return;
         }
 
         const newExpediente = await expedientesAPI.create({ ...formData });
 
-        try {
-            if (tieneDocumento.value && archivoSeleccionado.value) {
-                await expedientesAPI.uploadFile(newExpediente.id, archivoSeleccionado.value);
+        if (tieneDocumento.value && archivoSeleccionado.value) {
+            try {
+                const uploadedExpediente = await expedientesAPI.uploadFile(
+                    newExpediente.id,
+                    archivoSeleccionado.value,
+                );
                 toast.success('Expediente creado y documento subido correctamente');
-            } else {
-                const wordBlob = await expedientesAPI.generateWord(newExpediente.id);
-                const wordFile = new File([wordBlob], `${formData.numero}.docx`, {
-                    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                });
-
-                await expedientesAPI.uploadFile(newExpediente.id, wordFile);
-                toast.success('Expediente creado y documento generado correctamente');
+                emit('success', uploadedExpediente);
+            } catch (documentError) {
+                console.error('Error con documento, eliminando expediente:', documentError);
+                await expedientesAPI.delete(newExpediente.id);
+                toast.error('Error al procesar el documento. El expediente no fue creado.');
+                throw documentError;
             }
-
-            emit('success');
-        } catch (documentError) {
-            console.error('Error con documento, eliminando expediente:', documentError);
-            await expedientesAPI.delete(newExpediente.id);
-            toast.error('Error al procesar el documento. El expediente no fue creado.');
-            throw documentError;
+        } else {
+            toast.success('Expediente creado correctamente');
+            emit('success', newExpediente);
         }
     } catch (error) {
         // Los errores HTTP también son tratados por el interceptor de la API.
@@ -252,7 +249,8 @@ const handleDocumentToggle = (): void => {
                         ¿Ya existe un documento del expediente?
                     </label>
                     <p class="text-sm text-gray-500">
-                        Si marca esta opción, deberá subir el documento existente. Si no, se generará automáticamente.
+                        Si marca esta opción, deberá subir el documento existente. Si no, podrá crear su primera
+                        resolución desde el detalle del expediente.
                     </p>
                 </div>
             </div>

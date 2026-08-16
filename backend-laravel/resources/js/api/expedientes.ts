@@ -20,8 +20,38 @@ export interface Expediente {
     archivo: boolean;
     nombre_archivo: string | null;
     archivo_data?: ArchivoMetadata | null;
+    ultima_resolucion: number | null;
+    resolucion_detectada?: number | null;
     created_at: string;
     updated_at: string;
+}
+
+export type ResolucionEstado = 'base' | 'pendiente' | 'completada';
+
+export interface Resolucion {
+    id: number;
+    expediente_id: number;
+    numero: number;
+    estado: ResolucionEstado;
+    es_documento_base: boolean;
+    nombre_archivo: string | null;
+    tipo_archivo?: string | null;
+    created_at: string;
+    updated_at: string;
+    completada_at?: string | null;
+}
+
+export interface ResolucionesSnapshot {
+    ultima_resolucion: number | null;
+    resolucion_detectada: number | null;
+    resoluciones: Resolucion[];
+}
+
+export interface PlantillaResolucion {
+    blob: Blob;
+    resolucionId: number;
+    numero: number;
+    filename: string;
 }
 
 export interface CreateExpedienteData {
@@ -36,6 +66,9 @@ export interface CreateExpedienteData {
 }
 
 export type UpdateExpedienteData = Partial<CreateExpedienteData>;
+
+const isNullableInteger = (value: unknown): value is number | null =>
+    value === null || (typeof value === 'number' && Number.isInteger(value));
 
 export const expedientesAPI = {
     async getAll(): Promise<Expediente[]> {
@@ -102,6 +135,89 @@ export const expedientesAPI = {
         const response = await axios.get(`/expedientes/${id}/pdf`, {
             responseType: 'blob',
         });
+        return response.data;
+    },
+
+    async getResoluciones(id: number): Promise<ResolucionesSnapshot> {
+        const response = await axios.get(`/expedientes/${id}/resoluciones`);
+        const data: unknown = response.data;
+
+        if (!data || typeof data !== 'object') {
+            throw new Error('El servidor devolvió un historial de resoluciones inválido.');
+        }
+
+        const snapshot = data as Record<string, unknown>;
+
+        if (
+            !isNullableInteger(snapshot.ultima_resolucion) ||
+            !isNullableInteger(snapshot.resolucion_detectada) ||
+            !Array.isArray(snapshot.resoluciones)
+        ) {
+            throw new Error('El servidor devolvió un historial de resoluciones inválido.');
+        }
+
+        return {
+            ultima_resolucion: snapshot.ultima_resolucion,
+            resolucion_detectada: snapshot.resolucion_detectada,
+            resoluciones: snapshot.resoluciones as Resolucion[],
+        };
+    },
+
+    async confirmarResolucionInicial(id: number, numero: number): Promise<void> {
+        await axios.post(`/expedientes/${id}/resoluciones/confirmar-inicial`, { numero });
+    },
+
+    async generarSiguienteResolucion(id: number): Promise<PlantillaResolucion> {
+        const response = await axios.post(`/expedientes/${id}/resoluciones/siguiente`, undefined, {
+            responseType: 'blob',
+        });
+        const resolucionId = Number(response.headers['x-resolucion-id']);
+        const numero = Number(response.headers['x-resolucion-numero']);
+
+        if (!Number.isInteger(resolucionId) || !Number.isInteger(numero)) {
+            throw new Error('El servidor no identificó la resolución generada.');
+        }
+
+        const contentDisposition = String(response.headers['content-disposition'] ?? '');
+        const encodedFilename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+        const plainFilename = contentDisposition.match(/filename="?([^";]+)"?/i)?.[1];
+        const filename = encodedFilename
+            ? decodeURIComponent(encodedFilename)
+            : plainFilename || `resolucion_${numero}.docx`;
+
+        return { blob: response.data, resolucionId, numero, filename };
+    },
+
+    async completarResolucion(
+        expedienteId: number,
+        resolucionId: number,
+        file: File,
+        onProgress?: (progress: number) => void,
+    ): Promise<void> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        await axios.post(
+            `/expedientes/${expedienteId}/resoluciones/${resolucionId}/completar`,
+            formData,
+            {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: onProgress
+                    ? (event) => {
+                        if (event.total) {
+                            onProgress(Math.round((event.loaded * 100) / event.total));
+                        }
+                    }
+                    : undefined,
+            },
+        );
+    },
+
+    async downloadResolucion(expedienteId: number, resolucionId: number): Promise<Blob> {
+        const response = await axios.get(
+            `/expedientes/${expedienteId}/resoluciones/${resolucionId}/download`,
+            { responseType: 'blob' },
+        );
         return response.data;
     },
 };

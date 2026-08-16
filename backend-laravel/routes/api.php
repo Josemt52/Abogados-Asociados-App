@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DocumentoController;
 use App\Http\Controllers\Api\EstadisticasController;
 use App\Http\Controllers\Api\ExpedienteController;
+use App\Http\Controllers\Api\ResolucionController;
 use App\Http\Controllers\Api\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,13 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('expedientes', ExpedienteController::class);
     Route::post('/expedientes/{id}/archivo', [ExpedienteController::class, 'uploadFile']);
     Route::get('/expedientes/{id}/archivo/download', [ExpedienteController::class, 'downloadFile']);
+
+    // Resoluciones endpoints
+    Route::get('/expedientes/{id}/resoluciones', [ResolucionController::class, 'index']);
+    Route::post('/expedientes/{id}/resoluciones/confirmar-inicial', [ResolucionController::class, 'confirmarInicial']);
+    Route::post('/expedientes/{id}/resoluciones/siguiente', [ResolucionController::class, 'siguiente']);
+    Route::get('/expedientes/{id}/resoluciones/{resolucionId}/download', [ResolucionController::class, 'descargar']);
+    Route::post('/expedientes/{id}/resoluciones/{resolucionId}/completar', [ResolucionController::class, 'completar']);
 
     // Documentos endpoints
     Route::get('/expedientes/{id}/word', [DocumentoController::class, 'generateWord']);
