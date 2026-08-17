@@ -11,8 +11,6 @@ use PhpOffice\PhpWord\Style\Tab;
 
 class ResolutionTemplateService
 {
-    public function __construct(private readonly SpanishNumberService $numbers) {}
-
     public function generate(Expediente $expediente, int $resolutionNumber): string
     {
         $phpWord = new PhpWord;
@@ -46,7 +44,8 @@ class ResolutionTemplateService
             $line = $section->addTextRun([
                 'spaceAfter' => 0,
                 'lineHeight' => 1,
-                'tabs' => [new Tab(Tab::TAB_STOP_LEFT, 1500)],
+                'indentation' => ['left' => 4320],
+                'tabs' => [new Tab(Tab::TAB_STOP_LEFT, 5760)],
             ]);
             $line->addText($label);
             $line->addText("\t: ".mb_strtoupper(trim((string) $value), 'UTF-8'));
@@ -54,7 +53,7 @@ class ResolutionTemplateService
 
         $section->addTextBreak();
         $section->addText(
-            'RESOLUCIÓN N° '.$this->numbers->toWords($resolutionNumber),
+            'RESOLUCIÓN N° '.$resolutionNumber,
             ['bold' => true, 'font' => 'Arial', 'size' => 12],
             ['spaceAfter' => 120]
         );

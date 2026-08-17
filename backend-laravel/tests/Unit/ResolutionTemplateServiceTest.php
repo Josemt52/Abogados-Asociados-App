@@ -49,9 +49,14 @@ class ResolutionTemplateServiceTest extends TestCase
             $this->assertStringContainsString('Expediente', $text);
             $this->assertStringContainsString('Materia', $text);
             $this->assertStringContainsString('ACCIÓN DE AMPARO', $text);
-            $this->assertStringContainsString('RESOLUCIÓN N° VEINTE', $text);
+            $this->assertStringContainsString('RESOLUCIÓN N° 20', $text);
+            $this->assertStringNotContainsString('VEINTE', $text);
             $this->assertStringNotContainsString('Tercero', $text);
-            $this->assertCount(6, $xpath->query('//w:tab[@w:pos="1500"]'));
+            $this->assertCount(6, $xpath->query('//w:tab[@w:pos="5760"]'));
+            $this->assertCount(
+                6,
+                $xpath->query('//w:body/w:p[position() <= 6]/w:pPr/w:ind[@w:left="4320"]')
+            );
             $this->assertCount(0, $xpath->query('//w:body/w:p[position() <= 6]//w:b'));
             $this->assertCount(
                 1,
