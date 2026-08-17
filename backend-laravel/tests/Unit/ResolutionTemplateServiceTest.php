@@ -11,6 +11,29 @@ use ZipArchive;
 
 class ResolutionTemplateServiceTest extends TestCase
 {
+    public function test_download_name_preserves_the_original_name_and_appends_the_resolution_number(): void
+    {
+        $expediente = new Expediente(['numero' => '02536-2024']);
+        $templates = app(ResolutionTemplateService::class);
+
+        $this->assertSame(
+            'NULIDAD ACTO JURIDICO MOLLEAPAZA II - copia_resolucion_20.docx',
+            $templates->downloadName(
+                $expediente,
+                20,
+                'NULIDAD ACTO JURIDICO MOLLEAPAZA II - copia.doc'
+            )
+        );
+        $this->assertSame(
+            'Demanda acción_resolucion_21.docx',
+            $templates->downloadName($expediente, 21, 'C:\\documentos\\Demanda acción.DOCX')
+        );
+        $this->assertSame(
+            'expediente_02536_2024_resolucion_22.docx',
+            $templates->downloadName($expediente, 22)
+        );
+    }
+
     public function test_it_builds_the_conditional_legal_header_and_next_resolution_title(): void
     {
         $expediente = new Expediente([

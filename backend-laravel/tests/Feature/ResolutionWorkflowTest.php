@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use setasign\Fpdi\Fpdi;
 use setasign\Fpdi\PdfParser\StreamReader;
 use Tests\TestCase;
+use ZipArchive;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 class ResolutionWorkflowTest extends TestCase
@@ -158,6 +159,31 @@ class ResolutionWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_next_template_uses_the_original_base_document_name(): void
+    {
+        $this->authenticate();
+        $expediente = Expediente::create([
+            'numero' => 'EXP-ORIGINAL-NAME',
+            'archivo' => true,
+            'nombre_archivo' => 'expediente_consolidado.pdf',
+            'ultima_resolucion' => 19,
+        ]);
+        Resolucion::create([
+            'expediente_id' => $expediente->id,
+            'numero' => 19,
+            'estado' => Resolucion::ESTADO_BASE,
+            'es_documento_base' => true,
+            'nombre_archivo' => 'NULIDAD ACTO JURIDICO MOLLEAPAZA II - copia.doc',
+            'tipo_archivo' => 'application/msword',
+            'documento_data' => base64_encode('documento original'),
+        ]);
+
+        $this->post('/api/expedientes/'.$expediente->id.'/resoluciones/siguiente')
+            ->assertOk()
+            ->assertDownload('NULIDAD ACTO JURIDICO MOLLEAPAZA II - copia_resolucion_20.docx')
+            ->assertHeader('x-resolucion-numero', '20');
+    }
+
     public function test_completing_resolution_consolidates_pdf_and_only_then_advances_number(): void
     {
         $this->authenticate();
@@ -174,9 +200,20 @@ class ResolutionWorkflowTest extends TestCase
             'es_documento_base' => false,
         ]);
         $document = $this->wordDocument([
+            'Expediente: EXP-2026-002',
             'RESOLUCIÓN N.º UNO',
             'Contenido terminado de la nueva resolución.',
         ]);
+        $convertedPdf = Pdf::loadHTML('<p>Resolución inicial convertida</p>')->output();
+        $this->mock(LibreOfficeService::class, function (MockInterface $mock) use ($convertedPdf): void {
+            $mock->shouldReceive('convertToPdf')
+                ->once()
+                ->withArgs(function (string $document, string $format): bool {
+                    return $format === 'docx'
+                        && str_contains($this->documentXml($document), 'Expediente: EXP-2026-002');
+                })
+                ->andReturn($convertedPdf);
+        });
 
         $response = $this->post(
             '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolution->id.'/completar',
@@ -222,9 +259,27 @@ class ResolutionWorkflowTest extends TestCase
             'es_documento_base' => false,
         ]);
         $document = $this->wordDocument([
+            'Expediente: EXP-2026-MERGE',
+            'Materia: Proceso civil',
+            '',
             'RESOLUCIÓN N.º DOS',
             'Contenido de la segunda resolución.',
         ]);
+        $convertedPdf = Pdf::loadHTML('<p>Segunda resolución convertida</p>')->output();
+        $this->mock(LibreOfficeService::class, function (MockInterface $mock) use ($convertedPdf): void {
+            $mock->shouldReceive('convertToPdf')
+                ->once()
+                ->withArgs(function (string $document, string $format): bool {
+                    $xml = $this->documentXml($document);
+
+                    return $format === 'docx'
+                        && ! str_contains($xml, 'Expediente: EXP-2026-MERGE')
+                        && ! str_contains($xml, 'Materia: Proceso civil')
+                        && str_contains($xml, 'RESOLUCIÓN N.º DOS')
+                        && str_contains($xml, 'Contenido de la segunda resolución.');
+                })
+                ->andReturn($convertedPdf);
+        });
 
         $this->post(
             '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolution->id.'/completar',
@@ -340,5 +395,23 @@ class ResolutionWorkflowTest extends TestCase
         @unlink($path);
 
         return $binary === false ? '' : $binary;
+    }
+
+    private function documentXml(string $document): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'resolution_xml_');
+        file_put_contents($path, $document);
+        $archive = new ZipArchive;
+
+        try {
+            if ($archive->open($path) !== true) {
+                return '';
+            }
+
+            return (string) $archive->getFromName('word/document.xml');
+        } finally {
+            $archive->close();
+            @unlink($path);
+        }
     }
 }

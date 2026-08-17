@@ -66,10 +66,22 @@ class ResolutionTemplateService
         return $path;
     }
 
-    public function downloadName(Expediente $expediente, int $resolutionNumber): string
-    {
-        $expedienteNumber = Str::slug($expediente->numero, '_');
+    public function downloadName(
+        Expediente $expediente,
+        int $resolutionNumber,
+        ?string $originalDocumentName = null
+    ): string {
+        $normalizedPath = str_replace('\\', '/', trim((string) $originalDocumentName));
+        $baseName = pathinfo(basename($normalizedPath), PATHINFO_FILENAME);
+        $baseName = preg_replace('/[\x00-\x1F\x7F<>:"|?*]+/u', '_', $baseName) ?? '';
+        $baseName = preg_replace('/\s+/u', ' ', $baseName) ?? '';
+        $baseName = trim($baseName, ' ._-');
 
-        return "resolucion_{$resolutionNumber}_expediente_{$expedienteNumber}.docx";
+        if ($baseName === '') {
+            $expedienteNumber = Str::slug((string) $expediente->numero, '_');
+            $baseName = $expedienteNumber !== '' ? 'expediente_'.$expedienteNumber : 'expediente';
+        }
+
+        return "{$baseName}_resolucion_{$resolutionNumber}.docx";
     }
 }

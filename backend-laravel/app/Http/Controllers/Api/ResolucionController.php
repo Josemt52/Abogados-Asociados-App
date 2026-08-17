@@ -130,7 +130,7 @@ class ResolucionController extends Controller
         string $id,
         ResolutionTemplateService $templates
     ) {
-        [$expediente, $resolution] = DB::transaction(function () use ($id) {
+        [$expediente, $resolution, $originalDocumentName] = DB::transaction(function () use ($id) {
             $expediente = Expediente::lockForUpdate()->findOrFail($id);
 
             if ($expediente->ultima_resolucion === null) {
@@ -166,14 +166,19 @@ class ResolucionController extends Controller
                 ], 409));
             }
 
-            return [$expediente, $resolution];
+            $originalDocumentName = $expediente->resoluciones()
+                ->where('es_documento_base', true)
+                ->whereNotNull('nombre_archivo')
+                ->value('nombre_archivo');
+
+            return [$expediente, $resolution, $originalDocumentName];
         });
 
         $path = $templates->generate($expediente, $resolution->numero);
 
         return response()->download(
             $path,
-            $templates->downloadName($expediente, $resolution->numero),
+            $templates->downloadName($expediente, $resolution->numero, $originalDocumentName),
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'X-Resolucion-Id' => (string) $resolution->id,
@@ -218,7 +223,9 @@ class ResolucionController extends Controller
             : hash('sha256', (string) $expediente->archivoData->documento_data);
 
         try {
-            $newResolutionPdf = $converter->convertToPdfStrict($wordBinary, $fileName, $mimeType);
+            $newResolutionPdf = $expediente->archivoData === null
+                ? $converter->convertToPdfStrict($wordBinary, $fileName, $mimeType)
+                : $converter->convertResolutionToPdfStrict($wordBinary, $fileName, $mimeType);
             $documentsToMerge = [];
 
             if ($expediente->archivoData !== null) {

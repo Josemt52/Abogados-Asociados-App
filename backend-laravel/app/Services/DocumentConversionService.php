@@ -17,7 +17,8 @@ class DocumentConversionService
     private const SUPPORTED_FORMATS = ['pdf', 'doc', 'docx'];
 
     public function __construct(
-        private readonly LibreOfficeService $libreOffice
+        private readonly LibreOfficeService $libreOffice,
+        private readonly ResolutionHeaderStripper $resolutionHeaders
     ) {}
 
     /**
@@ -86,6 +87,37 @@ class DocumentConversionService
         }
 
         $pdf = $this->libreOffice->convertToPdf($document, $format);
+        $this->assertValidPdf($pdf);
+
+        return $pdf;
+    }
+
+    /**
+     * Convert a continuation for a master expediente, removing only the
+     * generated metadata block so that the legal header is not repeated.
+     */
+    public function convertResolutionToPdfStrict(
+        string $document,
+        string $fileName,
+        ?string $mimeType = null
+    ): string {
+        $format = $this->normalizeFormat($fileName);
+
+        if ($document === '') {
+            throw new DocumentConversionException('El contenido del documento está vacío.');
+        }
+
+        if ($format === 'doc') {
+            $document = $this->libreOffice->convertDocToDocx($document);
+            $format = 'docx';
+        }
+
+        if ($format !== 'docx') {
+            return $this->convertToPdfStrict($document, $fileName, $mimeType);
+        }
+
+        $document = $this->resolutionHeaders->stripGeneratedHeader($document);
+        $pdf = $this->libreOffice->convertToPdf($document, 'docx');
         $this->assertValidPdf($pdf);
 
         return $pdf;

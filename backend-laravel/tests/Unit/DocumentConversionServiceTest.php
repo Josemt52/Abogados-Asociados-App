@@ -6,6 +6,7 @@ use App\Exceptions\DocumentConversionException;
 use App\Exceptions\UnsupportedDocumentFormatException;
 use App\Services\DocumentConversionService;
 use App\Services\LibreOfficeService;
+use App\Services\ResolutionHeaderStripper;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Mockery;
 use PhpOffice\PhpWord\IOFactory;
@@ -99,7 +100,7 @@ class DocumentConversionServiceTest extends TestCase
             ->once()
             ->with('doc binario', 'doc')
             ->andThrow(new DocumentConversionException('LibreOffice no está disponible.'));
-        $service = new DocumentConversionService($libreOffice);
+        $service = new DocumentConversionService($libreOffice, new ResolutionHeaderStripper);
 
         $this->expectException(DocumentConversionException::class);
         $this->expectExceptionMessage('LibreOffice no está disponible.');
@@ -117,7 +118,7 @@ class DocumentConversionServiceTest extends TestCase
             ->with('docx binario', 'docx')
             ->andReturn($pdf);
 
-        $service = new DocumentConversionService($libreOffice);
+        $service = new DocumentConversionService($libreOffice, new ResolutionHeaderStripper);
 
         $this->assertSame($pdf, $service->convertToPdf('docx binario', 'expediente.docx'));
     }
@@ -130,12 +131,37 @@ class DocumentConversionServiceTest extends TestCase
             ->with('docx binario', 'docx')
             ->andThrow(new DocumentConversionException('LibreOffice falló.'));
         $libreOffice->shouldNotReceive('isAvailable');
-        $service = new DocumentConversionService($libreOffice);
+        $service = new DocumentConversionService($libreOffice, new ResolutionHeaderStripper);
 
         $this->expectException(DocumentConversionException::class);
         $this->expectExceptionMessage('LibreOffice falló.');
 
         $service->convertToPdfStrict('docx binario', 'expediente.docx');
+    }
+
+    public function test_it_converts_a_legacy_resolution_to_docx_before_stripping_its_header(): void
+    {
+        $pdf = Pdf::loadHTML('<p>Resolución sin cabecera repetida</p>')->output();
+        $libreOffice = Mockery::mock(LibreOfficeService::class);
+        $headers = Mockery::mock(ResolutionHeaderStripper::class);
+        $libreOffice->shouldReceive('convertDocToDocx')
+            ->once()
+            ->with('doc binario')
+            ->andReturn('docx convertido');
+        $headers->shouldReceive('stripGeneratedHeader')
+            ->once()
+            ->with('docx convertido')
+            ->andReturn('docx sin cabecera');
+        $libreOffice->shouldReceive('convertToPdf')
+            ->once()
+            ->with('docx sin cabecera', 'docx')
+            ->andReturn($pdf);
+        $service = new DocumentConversionService($libreOffice, $headers);
+
+        $this->assertSame(
+            $pdf,
+            $service->convertResolutionToPdfStrict('doc binario', 'resolucion.doc')
+        );
     }
 
     public function test_it_falls_back_to_phpword_when_libreoffice_rejects_a_docx(): void
@@ -152,7 +178,7 @@ class DocumentConversionServiceTest extends TestCase
             ->andThrow(new DocumentConversionException('LibreOffice falló.'));
 
         try {
-            $service = new DocumentConversionService($libreOffice);
+            $service = new DocumentConversionService($libreOffice, new ResolutionHeaderStripper);
             $pdf = $service->convertToPdf((string) file_get_contents($docxPath), 'expediente.docx');
 
             $this->assertStringStartsWith('%PDF-', $pdf);
