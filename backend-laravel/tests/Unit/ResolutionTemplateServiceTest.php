@@ -46,17 +46,24 @@ class ResolutionTemplateServiceTest extends TestCase
                 iterator_to_array($xpath->query('//w:t'))
             ));
 
-            $this->assertStringContainsString('EXPEDIENTE', $text);
+            $this->assertStringContainsString('Expediente', $text);
+            $this->assertStringContainsString('Materia', $text);
             $this->assertStringContainsString('ACCIÓN DE AMPARO', $text);
             $this->assertStringContainsString('RESOLUCIÓN N° VEINTE', $text);
-            $this->assertStringNotContainsString('TERCERO', $text);
+            $this->assertStringNotContainsString('Tercero', $text);
             $this->assertCount(6, $xpath->query('//w:tab[@w:pos="1500"]'));
+            $this->assertCount(0, $xpath->query('//w:body/w:p[position() <= 6]//w:b'));
+            $this->assertCount(
+                1,
+                $xpath->query('//w:t[contains(., "RESOLUCIÓN")]/ancestor::w:r/w:rPr/w:b')
+            );
 
             $pageSize = $xpath->query('//w:sectPr/w:pgSz')->item(0);
             $this->assertNotNull($pageSize);
             $this->assertSame('11906', $pageSize->getAttributeNS($wordNamespace, 'w'));
             $this->assertSame('16838', $pageSize->getAttributeNS($wordNamespace, 'h'));
-            $this->assertStringContainsString('Times New Roman', $stylesXml);
+            $this->assertStringContainsString('Arial', $stylesXml);
+            $this->assertStringContainsString('w:sz w:val="24"', $stylesXml);
         } finally {
             @unlink($path);
         }

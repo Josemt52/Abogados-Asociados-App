@@ -16,8 +16,8 @@ class ResolutionTemplateService
     public function generate(Expediente $expediente, int $resolutionNumber): string
     {
         $phpWord = new PhpWord;
-        $phpWord->setDefaultFontName('Times New Roman');
-        $phpWord->setDefaultFontSize(10);
+        $phpWord->setDefaultFontName('Arial');
+        $phpWord->setDefaultFontSize(12);
 
         $section = $phpWord->addSection([
             'pageSizeW' => 11906,
@@ -29,13 +29,13 @@ class ResolutionTemplateService
         ]);
 
         $fields = [
-            'EXPEDIENTE' => $expediente->numero,
-            'MATERIA' => $expediente->materia,
-            'JUZGADO' => $expediente->juzgado,
-            'ESPECIALISTA' => $expediente->especialista,
-            'TERCERO' => $expediente->tercero,
-            'DEMANDADO' => $expediente->demandado,
-            'DEMANDANTE' => $expediente->demandante,
+            'Expediente' => $expediente->numero,
+            'Materia' => $expediente->materia,
+            'Juzgado' => $expediente->juzgado,
+            'Especialista' => $expediente->especialista,
+            'Tercero' => $expediente->tercero,
+            'Demandado' => $expediente->demandado,
+            'Demandante' => $expediente->demandante,
         ];
 
         foreach ($fields as $label => $value) {
@@ -48,14 +48,14 @@ class ResolutionTemplateService
                 'lineHeight' => 1,
                 'tabs' => [new Tab(Tab::TAB_STOP_LEFT, 1500)],
             ]);
-            $line->addText($label, ['bold' => true]);
+            $line->addText($label);
             $line->addText("\t: ".mb_strtoupper(trim((string) $value), 'UTF-8'));
         }
 
         $section->addTextBreak();
         $section->addText(
             'RESOLUCIÓN N° '.$this->numbers->toWords($resolutionNumber),
-            ['bold' => true, 'size' => 11],
+            ['bold' => true, 'font' => 'Arial', 'size' => 12],
             ['spaceAfter' => 120]
         );
 
