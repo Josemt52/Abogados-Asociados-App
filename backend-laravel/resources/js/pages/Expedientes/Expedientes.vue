@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import { Eye, Plus, Search } from '@lucide/vue';
+import { RouterLink, useRouter, useRoute } from 'vue-router';
+import { ArrowLeft, Eye, FileText, Plus, Search } from '@lucide/vue';
 import { expedientesAPI, type Expediente } from '@/api';
 import ExpedienteForm from '@/components/ExpedienteForm/ExpedienteForm.vue';
 import Button from '@/components/UI/Button.vue';
@@ -13,9 +13,12 @@ import { isValidPdfBlob, pdfFilename } from '@/utils/pdf';
 type ViewerState = 'idle' | 'loading' | 'pdf' | 'download' | 'error';
 
 const router = useRouter();
+const route = useRoute();
 const searchTerm = ref('');
 const currentPage = ref(1);
 const showCreateModal = ref(false);
+const showUpdateModal = ref(false);
+const selectedExpediente = ref<Expediente | null>(null);
 const expedientes = ref<Expediente[] | null>(null);
 const loading = ref(true);
 const pageSize = 10;
@@ -91,6 +94,17 @@ const handleSearch = (): void => {
 const handleCreateSuccess = (expediente: Expediente): void => {
     showCreateModal.value = false;
     void router.push(`/expedientes/${expediente.id}`);
+};
+
+const handleUpdateSuccess = (_expediente: Expediente): void => {
+    showUpdateModal.value = false;
+    selectedExpediente.value = null;
+    void refetch();
+};
+
+const handleSelectForUpdate = (expediente: Expediente): void => {
+    selectedExpediente.value = expediente;
+    showUpdateModal.value = true;
 };
 
 const revokeViewerUrl = (): void => {
@@ -214,6 +228,18 @@ const closeViewerModal = (): void => {
 
 onMounted(() => {
     void refetch();
+    
+    // Handle query parameters for create/update modes
+    if (route.query.create === 'true') {
+        showCreateModal.value = true;
+        router.replace({ query: {} });
+    } else if (route.query.update === 'true') {
+        // Show selection mode for update
+        // User will click on a row to update
+    } else if (route.query.filter === 'finished') {
+        // Filter for finished expedientes
+        searchTerm.value = 'finalizado';
+    }
 });
 
 watch(searchTerm, () => {
@@ -235,9 +261,18 @@ onBeforeUnmount(() => {
 <template>
     <div class="space-y-6">
         <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900">Expedientes</h1>
-                <p class="text-gray-600">Gestiona todos los expedientes del sistema</p>
+            <div class="flex items-center space-x-4">
+                <RouterLink
+                    to="/main"
+                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                >
+                    <ArrowLeft class="mr-2 h-4 w-4" />
+                    Volver
+                </RouterLink>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Expedientes</h1>
+                    <p class="text-gray-600">Gestiona todos los expedientes del sistema</p>
+                </div>
             </div>
             <Button variant="primary" @click="showCreateModal = true">
                 <template #icon>
@@ -304,6 +339,14 @@ onBeforeUnmount(() => {
                     >
                         <Eye class="h-4 w-4" />
                     </button>
+                    <button
+                        type="button"
+                        class="rounded p-1.5 text-blue-700 transition-colors hover:bg-blue-100"
+                        title="Actualizar expediente"
+                        @click.stop="handleSelectForUpdate(row)"
+                    >
+                        <FileText class="h-4 w-4" />
+                    </button>
                 </div>
             </template>
         </Table>
@@ -340,6 +383,20 @@ onBeforeUnmount(() => {
             @close="showCreateModal = false"
         >
             <ExpedienteForm @success="handleCreateSuccess" @cancel="showCreateModal = false" />
+        </Modal>
+
+        <Modal
+            :open="showUpdateModal"
+            title="Actualizar Expediente"
+            size="xl"
+            @close="showUpdateModal = false"
+        >
+            <ExpedienteForm
+                v-if="selectedExpediente"
+                :expediente="selectedExpediente"
+                @success="handleUpdateSuccess"
+                @cancel="showUpdateModal = false"
+            />
         </Modal>
 
         <Modal :open="showViewerModal" :title="viewerTitle" size="full" @close="closeViewerModal">

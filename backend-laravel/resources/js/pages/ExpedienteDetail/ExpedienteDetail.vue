@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -374,7 +374,7 @@ const handleDelete = async (): Promise<void> => {
         loading.value = true;
         await expedientesAPI.delete(expedienteId.value);
         toast.success('Expediente eliminado correctamente');
-        await router.push('/expedientes');
+        await router.push('/main');
     } catch {
         toast.error('Error al eliminar el expediente');
     } finally {
@@ -428,20 +428,21 @@ watch(
     <div v-else-if="!expediente" class="py-12 text-center">
         <Scale class="mx-auto mb-4 h-12 w-12 text-gray-400" />
         <p class="text-gray-500">Expediente no encontrado</p>
-        <Button variant="outline" class="mt-4" @click="router.push('/expedientes')">
-            Volver a Expedientes
+        <Button variant="outline" class="mt-4" @click="router.push('/main')">
+            Volver al Menú
         </Button>
     </div>
 
     <div v-else class="space-y-6">
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-4">
-                <Button variant="outline" @click="router.push('/expedientes')">
-                    <template #icon>
-                        <ArrowLeft class="h-4 w-4" />
-                    </template>
-                    Volver
-                </Button>
+                <RouterLink
+                    to="/main"
+                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                >
+                    <ArrowLeft class="mr-2 h-4 w-4" />
+                    Volver al Menú
+                </RouterLink>
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">Expediente #{{ expediente.numero }}</h1>
                     <p class="text-gray-600">{{ expediente.materia }}</p>
