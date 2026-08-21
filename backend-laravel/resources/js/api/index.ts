@@ -10,6 +10,12 @@ export type { Estadisticas, EstadisticasPorEstado, EstadisticasPorTipo } from '.
 export type {
     CreateExpedienteData,
     Expediente,
+    OnlyOfficeDocumentMetadata,
+    OnlyOfficeDocumentType,
+    OnlyOfficeEditorSession,
+    OnlyOfficeHeartbeat,
+    OnlyOfficeMode,
+    OnlyOfficeSessionLease,
     PlantillaResolucion,
     Resolucion,
     ResolucionEstado,

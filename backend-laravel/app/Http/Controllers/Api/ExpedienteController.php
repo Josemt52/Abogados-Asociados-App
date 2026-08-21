@@ -33,6 +33,11 @@ class ExpedienteController extends Controller
             'nombre_archivo',
             'ultima_resolucion',
             'resolucion_detectada',
+            'master_pdf_rebuild_version',
+            'master_pdf_rebuild_status',
+            'master_pdf_rebuild_error',
+            'master_pdf_rebuild_requested_at',
+            'master_pdf_rebuilt_at',
             'created_at',
             'updated_at',
         ])->get();
@@ -196,6 +201,10 @@ class ExpedienteController extends Controller
             // We will generate PDF previews on demand via the DocumentoController when required.
             // Buscar archivo existente o crear nuevo
             $archivo = Archivo::firstOrNew(['expediente_id' => $id]);
+            $archivo->onlyoffice_version = (int) ($archivo->onlyoffice_version ?? 0) + 1;
+            $archivo->onlyoffice_saved_at = null;
+            $archivo->onlyoffice_session_open = false;
+            $archivo->onlyoffice_session_expires_at = null;
             $archivo->nombre_archivo = $fileName;
             $archivo->tipo_archivo = $mimeType;
             $archivo->documento_data = $documentoData;
@@ -232,7 +241,21 @@ class ExpedienteController extends Controller
      */
     public function downloadFile($id)
     {
-        Expediente::findOrFail($id);
+        $expediente = Expediente::findOrFail($id);
+
+        if ($expediente->master_pdf_rebuild_status !== Expediente::MASTER_PDF_READY) {
+            return response()->json([
+                'message' => $expediente->master_pdf_rebuild_status === Expediente::MASTER_PDF_PENDING
+                    ? 'El PDF consolidado se está actualizando. Intente nuevamente en unos segundos.'
+                    : 'No se pudo actualizar el PDF consolidado. Abra el expediente para reintentar.',
+            ], 409);
+        }
+
+        if ($expediente->hasActiveOnlyOfficeSourceSession()) {
+            return response()->json([
+                'message' => 'ONLYOFFICE aún está guardando los cambios. Intente nuevamente en unos segundos.',
+            ], 409);
+        }
 
         $archivo = Archivo::where('expediente_id', $id)->first();
         if (! $archivo) {

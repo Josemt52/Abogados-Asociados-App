@@ -49,6 +49,20 @@ class DocumentoController extends Controller
     {
         $expediente = Expediente::with('archivoData')->findOrFail($id);
 
+        if ($expediente->master_pdf_rebuild_status !== Expediente::MASTER_PDF_READY) {
+            return response()->json([
+                'message' => $expediente->master_pdf_rebuild_status === Expediente::MASTER_PDF_PENDING
+                    ? 'El PDF consolidado se está actualizando. Intente nuevamente en unos segundos.'
+                    : 'No se pudo actualizar el PDF consolidado. Abra el expediente para reintentar.',
+            ], 409);
+        }
+
+        if ($expediente->hasActiveOnlyOfficeSourceSession()) {
+            return response()->json([
+                'message' => 'ONLYOFFICE aún está guardando los cambios. Intente nuevamente en unos segundos.',
+            ], 409);
+        }
+
         // Check if expediente has an archivo
         if (! $expediente->archivoData) {
             return response()->json([

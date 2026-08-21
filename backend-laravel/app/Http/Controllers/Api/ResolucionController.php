@@ -2,19 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\DocumentConversionException;
 use App\Http\Controllers\Controller;
-use App\Models\Archivo;
 use App\Models\Expediente;
 use App\Models\Resolucion;
-use App\Services\DocumentConversionService;
-use App\Services\PdfMergeService;
+use App\Services\ResolutionCompletionService;
 use App\Services\ResolutionTemplateService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use Throwable;
 
 class ResolucionController extends Controller
 {
@@ -31,6 +27,9 @@ class ResolucionController extends Controller
                 'nombre_archivo',
                 'tipo_archivo',
                 'completada_at',
+                'onlyoffice_saved_at',
+                'onlyoffice_session_open',
+                'onlyoffice_session_expires_at',
                 'created_at',
                 'updated_at',
             ])
@@ -174,40 +173,84 @@ class ResolucionController extends Controller
             return [$expediente, $resolution, $originalDocumentName];
         });
 
-        $path = $templates->generate($expediente, $resolution->numero);
+        $downloadName = $templates->downloadName(
+            $expediente,
+            $resolution->numero,
+            $originalDocumentName
+        );
+        $binary = $resolution->documento_data === null
+            ? false
+            : base64_decode($resolution->documento_data, true);
 
-        return response()->download(
-            $path,
-            $templates->downloadName($expediente, $resolution->numero, $originalDocumentName),
+        if ($binary === false || $binary === '') {
+            $path = $templates->generate($expediente, $resolution->numero);
+
+            try {
+                $generated = file_get_contents($path);
+            } finally {
+                @unlink($path);
+            }
+
+            if ($generated === false || $generated === '') {
+                return response()->json(['message' => 'No se pudo generar la plantilla de resolución.'], 500);
+            }
+
+            [$resolution, $binary] = DB::transaction(function () use (
+                $id,
+                $resolution,
+                $generated,
+                $downloadName
+            ): array {
+                $lockedResolution = Resolucion::where('expediente_id', $id)
+                    ->lockForUpdate()
+                    ->findOrFail($resolution->id);
+                $stored = $lockedResolution->documento_data === null
+                    ? false
+                    : base64_decode($lockedResolution->documento_data, true);
+
+                if ($stored === false || $stored === '') {
+                    $hadStoredDocument = $lockedResolution->documento_data !== null;
+                    $lockedResolution->fill([
+                        'nombre_archivo' => $downloadName,
+                        'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'documento_data' => base64_encode($generated),
+                        'onlyoffice_version' => (int) $lockedResolution->onlyoffice_version
+                            + ($hadStoredDocument ? 1 : 0),
+                        'onlyoffice_saved_at' => null,
+                        'onlyoffice_session_open' => false,
+                        'onlyoffice_session_expires_at' => null,
+                    ])->save();
+                    $stored = $generated;
+                }
+
+                return [$lockedResolution, $stored];
+            });
+        } else {
+            $downloadName = $resolution->nombre_archivo ?: $downloadName;
+        }
+
+        return response()->streamDownload(
+            static function () use ($binary): void {
+                echo $binary;
+            },
+            $downloadName,
             [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'X-Resolucion-Id' => (string) $resolution->id,
                 'X-Resolucion-Numero' => (string) $resolution->numero,
             ]
-        )->deleteFileAfterSend(true);
+        );
     }
 
     public function completar(
         Request $request,
         string $id,
         string $resolucionId,
-        DocumentConversionService $converter,
-        PdfMergeService $merger
+        ResolutionCompletionService $completion
     ) {
         $request->validate([
             'file' => ['required', 'file', 'mimes:doc,docx', 'extensions:doc,docx', 'max:10240'],
         ]);
-
-        $expediente = Expediente::with('archivoData')->findOrFail($id);
-        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
-
-        if ($resolution->estado !== Resolucion::ESTADO_PENDIENTE
-            || $expediente->ultima_resolucion === null
-            || $resolution->numero !== $expediente->ultima_resolucion + 1) {
-            throw new HttpResponseException(response()->json([
-                'message' => 'La resolución no está pendiente o no es la siguiente del expediente.',
-            ], 409));
-        }
 
         $uploadedFile = $request->file('file');
         $fileName = $uploadedFile->getClientOriginalName();
@@ -218,100 +261,75 @@ class ResolucionController extends Controller
             return response()->json(['message' => 'El documento Word está vacío o no se pudo leer.'], 422);
         }
 
-        $storedDocumentFingerprint = $expediente->archivoData === null
-            ? null
-            : hash('sha256', (string) $expediente->archivoData->documento_data);
-
         try {
-            $newResolutionPdf = $expediente->archivoData === null
-                ? $converter->convertToPdfStrict($wordBinary, $fileName, $mimeType)
-                : $converter->convertResolutionToPdfStrict($wordBinary, $fileName, $mimeType);
-            $documentsToMerge = [];
-
-            if ($expediente->archivoData !== null) {
-                $storedBinary = base64_decode($expediente->archivoData->documento_data, true);
-
-                if ($storedBinary === false || $storedBinary === '') {
-                    throw new \RuntimeException('El documento consolidado almacenado no es válido.');
-                }
-
-                $documentsToMerge[] = $converter->convertToPdfStrict(
-                    $storedBinary,
-                    $expediente->archivoData->nombre_archivo,
-                    $expediente->archivoData->tipo_archivo
-                );
-            }
-
-            $documentsToMerge[] = $newResolutionPdf;
-            $consolidatedPdf = $merger->merge($documentsToMerge);
-        } catch (Throwable $exception) {
-            Log::warning('No se pudo consolidar una resolución', [
-                'expediente_id' => $expediente->id,
-                'resolucion_id' => $resolution->id,
-                'error' => $exception->getMessage(),
-            ]);
-
+            $result = $completion->complete(
+                (int) $id,
+                (int) $resolucionId,
+                $wordBinary,
+                $fileName,
+                $mimeType
+            );
+        } catch (DocumentConversionException) {
             return response()->json([
                 'message' => 'No se pudo convertir o consolidar el documento. La resolución continúa pendiente.',
             ], 422);
         }
 
-        $result = DB::transaction(function () use (
-            $id,
-            $resolucionId,
-            $fileName,
-            $mimeType,
-            $wordBinary,
-            $consolidatedPdf,
-            $storedDocumentFingerprint
-        ) {
-            $lockedExpediente = Expediente::lockForUpdate()->findOrFail($id);
-            $lockedResolution = Resolucion::where('expediente_id', $id)
-                ->lockForUpdate()
-                ->findOrFail($resolucionId);
-            $lockedArchivo = Archivo::where('expediente_id', $id)->lockForUpdate()->first();
-            $currentFingerprint = $lockedArchivo === null
-                ? null
-                : hash('sha256', (string) $lockedArchivo->documento_data);
+        return response()->json($result);
+    }
 
-            if ($lockedResolution->estado !== Resolucion::ESTADO_PENDIENTE
-                || $lockedExpediente->ultima_resolucion === null
-                || $lockedResolution->numero !== $lockedExpediente->ultima_resolucion + 1
-                || $currentFingerprint !== $storedDocumentFingerprint) {
-                throw new HttpResponseException(response()->json([
-                    'message' => 'El expediente cambió durante la consolidación. Vuelve a intentarlo.',
-                ], 409));
-            }
+    public function completarOnline(
+        string $id,
+        string $resolucionId,
+        ResolutionCompletionService $completion
+    ) {
+        $expediente = Expediente::findOrFail($id);
+        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
 
-            $lockedResolution->fill([
-                'estado' => Resolucion::ESTADO_COMPLETADA,
-                'es_documento_base' => false,
-                'nombre_archivo' => $fileName,
-                'tipo_archivo' => $mimeType,
-                'documento_data' => base64_encode($wordBinary),
-                'completada_at' => now(),
-            ])->save();
+        if ($resolution->documento_data === null || $resolution->nombre_archivo === null) {
+            return response()->json([
+                'message' => 'La resolución todavía no tiene un documento guardado para finalizar.',
+            ], 409);
+        }
 
-            $safeNumber = Str::slug($lockedExpediente->numero, '_');
-            $pdfName = "expediente_{$safeNumber}_resolucion_{$lockedResolution->numero}.pdf";
-            $archivo = $lockedArchivo ?? new Archivo(['expediente_id' => $lockedExpediente->id]);
-            $archivo->fill([
-                'nombre_archivo' => $pdfName,
-                'tipo_archivo' => 'application/pdf',
-                'documento_data' => base64_encode($consolidatedPdf),
-            ])->save();
+        if ($resolution->onlyoffice_saved_at === null) {
+            return response()->json([
+                'message' => 'Guarda primero la resolución en el editor y espera la confirmación de ONLYOFFICE antes de finalizarla.',
+            ], 409);
+        }
 
-            $lockedExpediente->fill([
-                'archivo' => true,
-                'nombre_archivo' => $pdfName,
-                'ultima_resolucion' => $lockedResolution->numero,
-            ])->save();
+        if ($resolution->onlyoffice_session_open
+            && ($resolution->onlyoffice_session_expires_at === null
+                || $resolution->onlyoffice_session_expires_at->isFuture())) {
+            return response()->json([
+                'message' => 'Cierra primero el editor y espera que ONLYOFFICE confirme el guardado final.',
+            ], 409);
+        }
 
-            return [
-                'expediente' => $lockedExpediente->fresh(),
-                'resolucion' => $lockedResolution->fresh(),
-            ];
-        });
+        $wordBinary = base64_decode($resolution->documento_data, true);
+
+        if ($wordBinary === false || $wordBinary === '') {
+            return response()->json(['message' => 'El documento guardado no es válido.'], 422);
+        }
+
+        try {
+            $result = $completion->complete(
+                (int) $id,
+                (int) $resolucionId,
+                $wordBinary,
+                $resolution->nombre_archivo,
+                $this->normalizeWordMime($resolution->nombre_archivo),
+                [
+                    'version' => (int) $resolution->onlyoffice_version,
+                    'document_hash' => hash('sha256', (string) $resolution->documento_data),
+                    'saved_at' => $resolution->onlyoffice_saved_at->getTimestamp(),
+                ]
+            );
+        } catch (DocumentConversionException) {
+            return response()->json([
+                'message' => 'No se pudo convertir o consolidar el documento. La resolución continúa pendiente.',
+            ], 422);
+        }
 
         return response()->json($result);
     }

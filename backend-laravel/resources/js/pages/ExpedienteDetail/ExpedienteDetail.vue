@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { isAxiosError } from 'axios';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import {
     ArrowLeft,
@@ -34,15 +35,21 @@ const showDeleteConfirm = ref(false);
 const showUpdateStatusModal = ref(false);
 const showInitialResolutionModal = ref(false);
 const showCompleteResolutionModal = ref(false);
+const showFinalizeOnlineModal = ref(false);
 const statusText = ref('');
 const statusLoading = ref(false);
 const initialResolutionNumber = ref(0);
 const initialResolutionLoading = ref(false);
 const generatingResolution = ref(false);
 const completingResolution = ref(false);
+const finalizingOnlineResolution = ref(false);
 const downloadingResolutionId = ref<number | null>(null);
 const completionResolutionId = ref<number | null>(null);
 const completionResolutionNumber = ref<number | null>(null);
+const onlineFinalizationResolutionId = ref<number | null>(null);
+const onlineFinalizationResolutionNumber = ref<number | null>(null);
+const onlineFinalizationError = ref<string | null>(null);
+const retryingMasterPdf = ref(false);
 const hasPromptedInitialResolution = ref(false);
 const loading = ref(false);
 const isGenerating = ref(false);
@@ -52,6 +59,9 @@ const expedienteLoading = ref(true);
 const resolucionesLoading = ref(true);
 const resolucionesError = ref<string | null>(null);
 let refetchRequestId = 0;
+let masterPdfPollTimer: ReturnType<typeof setTimeout> | null = null;
+let masterPdfPollGeneration = 0;
+let masterPdfVerificationUntil = 0;
 
 const rawId = computed(() => {
     const routeId = route.params.id;
@@ -64,6 +74,12 @@ const sortedResoluciones = computed(() =>
 const pendingResolution = computed(
     () => sortedResoluciones.value.find((resolucion) => resolucion.estado === 'pendiente') ?? null,
 );
+const onlineFinalizationResolution = computed(
+    () =>
+        resoluciones.value.find(
+            (resolucion) => resolucion.id === onlineFinalizationResolutionId.value,
+        ) ?? null,
+);
 const resolutionHistoryReady = computed(
     () =>
         expediente.value !== null &&
@@ -71,6 +87,20 @@ const resolutionHistoryReady = computed(
         resolucionesError.value === null,
 );
 const nextResolutionNumber = computed(() => (expediente.value?.ultima_resolucion ?? 0) + 1);
+const masterPdfRebuildStatus = computed(
+    () => expediente.value?.master_pdf_rebuild_status ?? 'ready',
+);
+const masterPdfReady = computed(() => masterPdfRebuildStatus.value === 'ready');
+const masterPdfRebuildStale = computed(() => {
+    if (masterPdfRebuildStatus.value !== 'pending') {
+        return false;
+    }
+
+    const requestedAt = expediente.value?.master_pdf_rebuild_requested_at;
+    const timestamp = requestedAt ? new Date(requestedAt).getTime() : Number.NaN;
+
+    return !Number.isFinite(timestamp) || Date.now() - timestamp >= 10 * 60 * 1000;
+});
 const lastResolutionLabel = computed(() => {
     if (!resolutionHistoryReady.value) {
         return resolucionesLoading.value ? 'Cargando' : 'No disponible';
@@ -185,6 +215,106 @@ const refetch = async (): Promise<void> => {
     }
 };
 
+const clearMasterPdfPollTimer = (): void => {
+    if (masterPdfPollTimer !== null) {
+        clearTimeout(masterPdfPollTimer);
+        masterPdfPollTimer = null;
+    }
+};
+
+const stopMasterPdfPolling = (): void => {
+    masterPdfPollGeneration += 1;
+    clearMasterPdfPollTimer();
+};
+
+const refreshMasterPdfState = async (
+    requestedExpedienteId: number,
+    generation: number,
+): Promise<void> => {
+    try {
+        const refreshed = await expedientesAPI.getById(requestedExpedienteId, { silent: true });
+
+        if (
+            generation !== masterPdfPollGeneration ||
+            expedienteId.value !== requestedExpedienteId ||
+            expediente.value === null
+        ) {
+            return;
+        }
+
+        expediente.value = {
+            ...expediente.value,
+            archivo: refreshed.archivo,
+            nombre_archivo: refreshed.nombre_archivo,
+            master_pdf_rebuild_version: refreshed.master_pdf_rebuild_version,
+            master_pdf_rebuild_status: refreshed.master_pdf_rebuild_status,
+            master_pdf_rebuild_error: refreshed.master_pdf_rebuild_error,
+            master_pdf_rebuild_requested_at: refreshed.master_pdf_rebuild_requested_at,
+            master_pdf_rebuilt_at: refreshed.master_pdf_rebuilt_at,
+            updated_at: refreshed.updated_at,
+        };
+    } catch {
+        // A transient polling failure must not interrupt the user's work.
+    }
+};
+
+const shouldPollMasterPdf = (): boolean =>
+    masterPdfRebuildStatus.value === 'pending' ||
+    (masterPdfRebuildStatus.value !== 'failed' && Date.now() < masterPdfVerificationUntil);
+
+const scheduleMasterPdfPoll = (): void => {
+    clearMasterPdfPollTimer();
+
+    if (!shouldPollMasterPdf()) {
+        return;
+    }
+
+    const requestedExpedienteId = expedienteId.value;
+    const generation = masterPdfPollGeneration;
+
+    if (!Number.isInteger(requestedExpedienteId) || requestedExpedienteId < 1) {
+        return;
+    }
+
+    masterPdfPollTimer = setTimeout(async () => {
+        masterPdfPollTimer = null;
+        await refreshMasterPdfState(requestedExpedienteId, generation);
+
+        if (
+            generation === masterPdfPollGeneration &&
+            expedienteId.value === requestedExpedienteId &&
+            shouldPollMasterPdf()
+        ) {
+            scheduleMasterPdfPoll();
+        }
+    }, 3000);
+};
+
+const handleRetryMasterPdf = async (): Promise<void> => {
+    try {
+        retryingMasterPdf.value = true;
+        await expedientesAPI.retryMasterPdf(expedienteId.value);
+
+        if (expediente.value) {
+            expediente.value = {
+                ...expediente.value,
+                master_pdf_rebuild_status: 'pending',
+                master_pdf_rebuild_error: null,
+            };
+        }
+
+        toast.success('La actualización del PDF se programó nuevamente.');
+        scheduleMasterPdfPoll();
+    } catch (error) {
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo reintentar la actualización del PDF.'),
+        );
+        await refetch();
+    } finally {
+        retryingMasterPdf.value = false;
+    }
+};
+
 const handleFileUpload = async (
     file: File,
     onProgress?: (progress: number) => void,
@@ -207,20 +337,30 @@ const handleFileUpload = async (
 };
 
 const handleDownloadFile = async (): Promise<void> => {
+    if (!masterPdfReady.value) {
+        toast.error('El PDF consolidado todavía no está disponible.');
+        return;
+    }
+
     try {
         loading.value = true;
         const blob = await expedientesAPI.downloadFile(expedienteId.value);
         const filename = expediente.value?.nombre_archivo || 'documento.docx';
         downloadBlob(blob, filename);
         toast.success('Archivo descargado correctamente');
-    } catch {
-        toast.error('Error al descargar el archivo');
+    } catch (error) {
+        toast.error(await getApiErrorMessage(error, 'Error al descargar el archivo'));
     } finally {
         loading.value = false;
     }
 };
 
 const handleGeneratePdf = async (): Promise<void> => {
+    if (!masterPdfReady.value) {
+        toast.error('El PDF consolidado todavía no está disponible.');
+        return;
+    }
+
     try {
         isGenerating.value = true;
         const blob = await expedientesAPI.generatePdf(expedienteId.value);
@@ -279,6 +419,79 @@ const openPendingResolution = (resolucion: Resolucion): void => {
     showCompleteResolutionModal.value = true;
 };
 
+const openOnlyOfficeEditor = async (
+    type: 'expediente' | 'resolucion',
+    documentId: number,
+): Promise<void> => {
+    await router.push({
+        name: 'onlyoffice-editor',
+        params: {
+            expedienteId: expedienteId.value,
+            type,
+            documentId,
+        },
+    });
+};
+
+const openSourceDocumentEditor = (): void => {
+    void openOnlyOfficeEditor('expediente', expedienteId.value);
+};
+
+const openResolutionEditor = (resolucion: Resolucion): void => {
+    void openOnlyOfficeEditor('resolucion', resolucion.id);
+};
+
+const openOnlineFinalization = (resolucion: Resolucion): void => {
+    onlineFinalizationResolutionId.value = resolucion.id;
+    onlineFinalizationResolutionNumber.value = resolucion.numero;
+    onlineFinalizationError.value = null;
+    showFinalizeOnlineModal.value = true;
+};
+
+const closeOnlineFinalization = (): void => {
+    if (finalizingOnlineResolution.value) {
+        return;
+    }
+
+    showFinalizeOnlineModal.value = false;
+    onlineFinalizationError.value = null;
+};
+
+const handleFinalizeOnlineResolution = async (): Promise<void> => {
+    const resolucionId = onlineFinalizationResolutionId.value;
+
+    if (resolucionId == null) {
+        onlineFinalizationError.value = 'No se pudo identificar la resolución pendiente.';
+        return;
+    }
+
+    try {
+        finalizingOnlineResolution.value = true;
+        onlineFinalizationError.value = null;
+        await expedientesAPI.completarResolucionOnline(expedienteId.value, resolucionId);
+        const resolutionNumber = onlineFinalizationResolutionNumber.value;
+        showFinalizeOnlineModal.value = false;
+        onlineFinalizationResolutionId.value = null;
+        onlineFinalizationResolutionNumber.value = null;
+        toast.success(`Resolución ${resolutionNumber} finalizada e incorporada al expediente.`);
+        await refetch();
+    } catch (error) {
+        const status = isAxiosError(error) ? error.response?.status : null;
+        onlineFinalizationError.value =
+            status === 409 || status === 422
+                ? await getApiErrorMessage(
+                      error,
+                      'ONLYOFFICE aún está guardando; espere y reintente.',
+                  )
+                : await getApiErrorMessage(
+                      error,
+                      'No se pudo finalizar la resolución. Intente nuevamente.',
+                  );
+    } finally {
+        finalizingOnlineResolution.value = false;
+    }
+};
+
 const handleGenerateNextResolution = async (): Promise<void> => {
     if (!resolutionHistoryReady.value) {
         toast.error('El historial de resoluciones no está disponible. Vuelve a intentarlo.');
@@ -290,20 +503,40 @@ const handleGenerateNextResolution = async (): Promise<void> => {
         return;
     }
 
+    if (pendingResolution.value) {
+        openResolutionEditor(pendingResolution.value);
+        return;
+    }
+
     try {
         generatingResolution.value = true;
         const plantilla = await expedientesAPI.generarSiguienteResolucion(expedienteId.value);
-        downloadBlob(plantilla.blob, plantilla.filename);
-
-        completionResolutionId.value = plantilla.resolucionId;
-        completionResolutionNumber.value = plantilla.numero;
-        showCompleteResolutionModal.value = true;
-        toast.success(`Plantilla de la resolución ${plantilla.numero} descargada.`);
-        await refetch();
+        toast.success(`Resolución ${plantilla.numero} creada. Ya puede redactarla en el navegador.`);
+        await openOnlyOfficeEditor('resolucion', plantilla.resolucionId);
     } catch (error) {
         console.error('Error generating next resolution', error);
         toast.error(
             await getApiErrorMessage(error, 'No se pudo generar la siguiente resolución.'),
+        );
+    } finally {
+        generatingResolution.value = false;
+    }
+};
+
+const handleDownloadPendingTemplate = async (): Promise<void> => {
+    if (!pendingResolution.value) {
+        toast.error('No hay una resolución pendiente para descargar.');
+        return;
+    }
+
+    try {
+        generatingResolution.value = true;
+        const plantilla = await expedientesAPI.generarSiguienteResolucion(expedienteId.value);
+        downloadBlob(plantilla.blob, plantilla.filename);
+        toast.success(`Plantilla de la resolución ${plantilla.numero} descargada.`);
+    } catch (error) {
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo descargar la plantilla de la resolución.'),
         );
     } finally {
         generatingResolution.value = false;
@@ -352,6 +585,11 @@ const handleCompleteResolution = async (
 const formatResolutionDate = (dateValue: string): string => {
     const date = new Date(dateValue);
     return Number.isNaN(date.getTime()) ? 'Sin fecha' : date.toLocaleDateString('es-PE');
+};
+
+const hasEditableWordSource = (resolucion: Resolucion): boolean => {
+    const fileName = resolucion.nombre_archivo?.trim().toLowerCase() ?? '';
+    return fileName.endsWith('.doc') || fileName.endsWith('.docx');
 };
 
 const handleDownloadResolution = async (resolucion: Resolucion): Promise<void> => {
@@ -411,13 +649,71 @@ watch(
             return;
         }
 
+        masterPdfVerificationUntil = 0;
+
+        try {
+            const verificationKey = `onlyoffice:verify-save:${id}`;
+            const returnedAt = Number(sessionStorage.getItem(verificationKey));
+            sessionStorage.removeItem(verificationKey);
+
+            if (
+                Number.isFinite(returnedAt) &&
+                returnedAt > 0 &&
+                Date.now() - returnedAt <= 2 * 60 * 1000
+            ) {
+                masterPdfVerificationUntil = Date.now() + 60 * 1000;
+            }
+        } catch {
+            // The backend independently blocks stale downloads while the
+            // ONLYOFFICE session or PDF rebuild remains active.
+        }
+
         hasPromptedInitialResolution.value = false;
         showInitialResolutionModal.value = false;
         showCompleteResolutionModal.value = false;
+        showFinalizeOnlineModal.value = false;
         void refetch();
     },
     { immediate: true },
 );
+
+watch(
+    [rawId, () => route.query.editDocument],
+    ([id, editDocument]) => {
+        const requested = Array.isArray(editDocument) ? editDocument[0] : editDocument;
+        const requestedId = Number(id);
+
+        if (
+            (requested === 'true' || requested === '1') &&
+            Number.isInteger(requestedId) &&
+            requestedId > 0
+        ) {
+            void router.replace({
+                name: 'onlyoffice-editor',
+                params: {
+                    expedienteId: requestedId,
+                    type: 'expediente',
+                    documentId: requestedId,
+                },
+            });
+        }
+    },
+    { immediate: true },
+);
+
+watch(
+    [rawId, masterPdfRebuildStatus],
+    () => {
+        stopMasterPdfPolling();
+        scheduleMasterPdfPoll();
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    refetchRequestId += 1;
+    stopMasterPdfPolling();
+});
 </script>
 
 <template>
@@ -449,11 +745,17 @@ watch(
                 </div>
             </div>
             <div class="flex space-x-3">
+                <Button v-if="expediente.archivo" variant="primary" @click="openSourceDocumentEditor">
+                    <template #icon>
+                        <FileIcon class="h-4 w-4" />
+                    </template>
+                    Editar documento
+                </Button>
                 <Button variant="outline" @click="showEditModal = true">
                     <template #icon>
                         <Edit class="h-4 w-4" />
                     </template>
-                    Editar
+                    Editar datos
                 </Button>
                 <Button
                     v-if="resolutionHistoryReady && sortedResoluciones.length === 0"
@@ -480,6 +782,59 @@ watch(
                 <span class="text-sm font-medium text-blue-900">
                     • Última resolución: {{ lastResolutionLabel }}
                 </span>
+            </div>
+        </div>
+
+        <div
+            v-if="masterPdfRebuildStatus === 'pending'"
+            aria-live="polite"
+            class="rounded-lg border border-amber-300 bg-amber-50 p-4"
+        >
+            <div class="flex items-start gap-3">
+                <Clock class="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                <div>
+                    <p class="font-semibold text-amber-950">Actualizando el PDF consolidado</p>
+                    <p class="mt-1 text-sm text-amber-900">
+                        El documento Word ya se guardó. El sistema está preparando la versión actualizada para
+                        verla y descargarla; esta pantalla se actualizará automáticamente.
+                    </p>
+                    <Button
+                        v-if="masterPdfRebuildStale"
+                        variant="outline"
+                        size="sm"
+                        class="mt-3"
+                        :loading="retryingMasterPdf"
+                        @click="handleRetryMasterPdf"
+                    >
+                        Reintentar actualización del PDF
+                    </Button>
+                </div>
+            </div>
+        </div>
+
+        <div
+            v-else-if="masterPdfRebuildStatus === 'failed'"
+            role="alert"
+            class="rounded-lg border border-red-300 bg-red-50 p-4"
+        >
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="font-semibold text-red-950">No se pudo actualizar el PDF consolidado</p>
+                    <p class="mt-1 text-sm text-red-900">
+                        {{
+                            expediente.master_pdf_rebuild_error ||
+                            'El documento Word quedó guardado y puede volver a intentar la actualización.'
+                        }}
+                    </p>
+                </div>
+                <Button
+                    variant="outline"
+                    class="shrink-0"
+                    :loading="retryingMasterPdf"
+                    @click="handleRetryMasterPdf"
+                >
+                    Reintentar actualización del PDF
+                </Button>
             </div>
         </div>
 
@@ -623,7 +978,7 @@ watch(
                                                 ? resolucion.nombre_archivo || 'Documento incorporado'
                                                 : resolucion.estado === 'base'
                                                   ? 'Documento original usado como base del expediente'
-                                                  : 'Pendiente de subir el Word terminado'
+                                                  : 'Pendiente de edición y finalización'
                                         }}
                                         •
                                         {{
@@ -632,23 +987,45 @@ watch(
                                             )
                                         }}
                                     </p>
+                                    <p
+                                        v-if="
+                                            resolucion.estado === 'pendiente' &&
+                                            !resolucion.onlyoffice_saved_at
+                                        "
+                                        class="mt-1 text-sm font-medium text-gray-700"
+                                    >
+                                        Para finalizar en línea, cierre o guarde el editor y espere unos segundos.
+                                    </p>
                                 </div>
                             </div>
-                            <div class="flex items-center space-x-2">
+                            <div class="flex flex-wrap items-center justify-end gap-2">
                                 <Button
                                     v-if="resolucion.estado === 'pendiente'"
-                                    variant="outline"
+                                    variant="primary"
                                     size="sm"
-                                    :loading="generatingResolution"
-                                    @click="handleGenerateNextResolution"
+                                    @click="openResolutionEditor(resolucion)"
                                 >
                                     <template #icon>
-                                        <Download class="h-4 w-4" />
+                                        <Edit class="h-4 w-4" />
                                     </template>
-                                    Descargar plantilla
+                                    Editar resolución
                                 </Button>
                                 <Button
-                                    v-else-if="resolucion.nombre_archivo"
+                                    v-if="
+                                        resolucion.estado === 'completada' &&
+                                        hasEditableWordSource(resolucion)
+                                    "
+                                    variant="outline"
+                                    size="sm"
+                                    @click="openResolutionEditor(resolucion)"
+                                >
+                                    <template #icon>
+                                        <Edit class="h-4 w-4" />
+                                    </template>
+                                    Editar
+                                </Button>
+                                <Button
+                                    v-if="resolucion.estado !== 'pendiente' && resolucion.nombre_archivo"
                                     variant="outline"
                                     size="sm"
                                     :loading="downloadingResolutionId === resolucion.id"
@@ -663,9 +1040,32 @@ watch(
                                     v-if="resolucion.estado === 'pendiente'"
                                     variant="outline"
                                     size="sm"
+                                    @click="openOnlineFinalization(resolucion)"
+                                >
+                                    <template #icon>
+                                        <CheckCircle2 class="h-4 w-4" />
+                                    </template>
+                                    Finalizar resolución
+                                </Button>
+                                <Button
+                                    v-if="resolucion.estado === 'pendiente'"
+                                    variant="outline"
+                                    size="sm"
+                                    :loading="generatingResolution"
+                                    @click="handleDownloadPendingTemplate"
+                                >
+                                    <template #icon>
+                                        <Download class="h-4 w-4" />
+                                    </template>
+                                    Descargar plantilla
+                                </Button>
+                                <Button
+                                    v-if="resolucion.estado === 'pendiente'"
+                                    variant="outline"
+                                    size="sm"
                                     @click="openPendingResolution(resolucion)"
                                 >
-                                    Subir documento
+                                    Subir Word terminado
                                 </Button>
                             </div>
                         </div>
@@ -694,7 +1094,7 @@ watch(
                             <template v-if="resolucionesLoading">Cargando resoluciones...</template>
                             <template v-else-if="resolucionesError">Historial no disponible</template>
                             <template v-else-if="pendingResolution">
-                                Descargar plantilla {{ pendingResolution.numero }}
+                                Editar resolución {{ pendingResolution.numero }}
                             </template>
                             <template v-else-if="expediente.ultima_resolucion == null">
                                 Configurar resoluciones
@@ -707,27 +1107,58 @@ watch(
                         <Button
                             v-if="expediente.archivo"
                             variant="outline"
+                            size="lg"
+                            class="w-full justify-start"
+                            @click="openSourceDocumentEditor"
+                        >
+                            <template #icon>
+                                <Edit class="h-5 w-5" />
+                            </template>
+                            Editar documento en línea
+                        </Button>
+
+                        <Button
+                            v-if="expediente.archivo"
+                            variant="outline"
                             :loading="loading"
+                            :disabled="!masterPdfReady"
+                            :title="
+                                masterPdfReady
+                                    ? 'Descargar el documento consolidado'
+                                    : 'Espere a que termine la actualización del PDF consolidado'
+                            "
                             class="w-full justify-start"
                             @click="handleDownloadFile"
                         >
                             <template #icon>
                                 <Download class="h-4 w-4" />
                             </template>
-                            Descargar Archivo
+                            <template v-if="masterPdfRebuildStatus === 'pending'">
+                                PDF actualizándose...
+                            </template>
+                            <template v-else-if="masterPdfRebuildStatus === 'failed'">
+                                PDF no disponible
+                            </template>
+                            <template v-else>Descargar archivo</template>
                         </Button>
 
                         <Button
                             v-if="expediente.archivo"
                             variant="outline"
                             :loading="isGenerating"
+                            :disabled="!masterPdfReady"
+                            :title="
+                                masterPdfReady
+                                    ? 'Generar la vista PDF del expediente'
+                                    : 'Espere a que termine la actualización del PDF consolidado'
+                            "
                             class="w-full justify-start"
                             @click="handleGeneratePdf"
                         >
                             <template #icon>
                                 <FileIcon class="h-4 w-4" />
                             </template>
-                            Generar PDF
+                            Ver o generar PDF
                         </Button>
                     </div>
                 </div>
@@ -836,8 +1267,9 @@ watch(
         >
             <div class="space-y-5">
                 <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    La plantilla ya fue descargada. Termine de redactarla y arrastre aquí el documento Word. El
-                    número del expediente se actualizará únicamente cuando la carga finalice correctamente.
+                    Si redactó la resolución fuera del sistema, seleccione o arrastre aquí el documento Word
+                    terminado. El número del expediente se actualizará únicamente cuando la carga finalice
+                    correctamente.
                 </div>
 
                 <FileUploader
@@ -850,6 +1282,56 @@ watch(
                     Conservaremos el documento de esta resolución en el historial y actualizaremos el expediente
                     consolidado.
                 </p>
+            </div>
+        </Modal>
+
+        <Modal
+            :open="showFinalizeOnlineModal"
+            :title="`Finalizar Resolución N.º ${onlineFinalizationResolutionNumber ?? ''}`"
+            size="md"
+            @close="closeOnlineFinalization"
+        >
+            <div class="space-y-5">
+                <div class="rounded-lg border border-gray-300 bg-gray-50 p-4 text-base text-gray-800">
+                    <template v-if="!onlineFinalizationResolution?.onlyoffice_saved_at">
+                        Cierre o guarde el editor y espere unos segundos para que ONLYOFFICE confirme el
+                        guardado. Si todavía está procesando, podrá reintentar sin perder el documento.
+                    </template>
+                    <template v-else>
+                        ONLYOFFICE ya confirmó el guardado. Al finalizar, el documento se incorporará al
+                        expediente y se actualizará el PDF consolidado.
+                    </template>
+                </div>
+
+                <p class="font-semibold text-gray-950">
+                    ¿Confirma que terminó de redactar y revisar esta resolución?
+                </p>
+
+                <div
+                    v-if="onlineFinalizationError"
+                    class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800"
+                    role="alert"
+                >
+                    {{ onlineFinalizationError }}
+                </div>
+
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button
+                        variant="outline"
+                        size="lg"
+                        :disabled="finalizingOnlineResolution"
+                        @click="closeOnlineFinalization"
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        size="lg"
+                        :loading="finalizingOnlineResolution"
+                        @click="handleFinalizeOnlineResolution"
+                    >
+                        Sí, finalizar resolución
+                    </Button>
+                </div>
             </div>
         </Modal>
 

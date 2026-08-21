@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRouter, useRoute } from 'vue-router';
-import { ArrowLeft, Eye, FileText, Plus, Search } from '@lucide/vue';
+import { ArrowLeft, Eye, FilePenLine, FolderOpen, Plus, Search } from '@lucide/vue';
 import { expedientesAPI, type Expediente } from '@/api';
 import ExpedienteForm from '@/components/ExpedienteForm/ExpedienteForm.vue';
 import Button from '@/components/UI/Button.vue';
@@ -17,8 +17,6 @@ const route = useRoute();
 const searchTerm = ref('');
 const currentPage = ref(1);
 const showCreateModal = ref(false);
-const showUpdateModal = ref(false);
-const selectedExpediente = ref<Expediente | null>(null);
 const expedientes = ref<Expediente[] | null>(null);
 const loading = ref(true);
 const pageSize = 10;
@@ -32,13 +30,9 @@ const selectedViewerRow = ref<Expediente | null>(null);
 let viewerRequestId = 0;
 
 const columns = [
-    { key: 'numero', label: 'Número' },
+    { key: 'numero', label: 'Número de expediente' },
     { key: 'materia', label: 'Materia' },
-    { key: 'juzgado', label: 'Juzgado' },
-    { key: 'especialista', label: 'Especialista' },
-    { key: 'demandante', label: 'Demandante' },
-    { key: 'demandado', label: 'Demandado' },
-    { key: 'archivo', label: 'Archivo' },
+    { key: 'estado', label: 'Estado' },
     { key: 'acciones', label: 'Acciones' },
 ];
 
@@ -96,15 +90,44 @@ const handleCreateSuccess = (expediente: Expediente): void => {
     void router.push(`/expedientes/${expediente.id}`);
 };
 
-const handleUpdateSuccess = (_expediente: Expediente): void => {
-    showUpdateModal.value = false;
-    selectedExpediente.value = null;
-    void refetch();
+const handleEditDocument = (expediente: Expediente): void => {
+    void router.push({
+        path: `/expedientes/${expediente.id}`,
+        query: { editDocument: 'true' },
+    });
 };
 
-const handleSelectForUpdate = (expediente: Expediente): void => {
-    selectedExpediente.value = expediente;
-    showUpdateModal.value = true;
+const canViewMasterPdf = (expediente: Expediente): boolean =>
+    expediente.archivo &&
+    expediente.master_pdf_rebuild_status !== 'pending' &&
+    expediente.master_pdf_rebuild_status !== 'failed';
+
+const masterPdfActionLabel = (expediente: Expediente): string => {
+    if (expediente.master_pdf_rebuild_status === 'pending') {
+        return 'Actualizando PDF';
+    }
+
+    if (expediente.master_pdf_rebuild_status === 'failed') {
+        return 'PDF no disponible';
+    }
+
+    return 'Ver documento';
+};
+
+const masterPdfActionTitle = (expediente: Expediente): string => {
+    if (!expediente.archivo) {
+        return 'Este expediente no tiene un documento asociado';
+    }
+
+    if (expediente.master_pdf_rebuild_status === 'pending') {
+        return 'El PDF consolidado se está actualizando';
+    }
+
+    if (expediente.master_pdf_rebuild_status === 'failed') {
+        return 'Abra el expediente para reintentar la actualización del PDF';
+    }
+
+    return 'Ver documento';
 };
 
 const revokeViewerUrl = (): void => {
@@ -136,6 +159,15 @@ const handleViewClick = async (row: Expediente): Promise<void> => {
 
     if (!row.archivo) {
         viewerMessage.value = 'Este expediente no tiene un documento asociado todavía.';
+        viewerState.value = 'error';
+        return;
+    }
+
+    if (!canViewMasterPdf(row)) {
+        viewerMessage.value =
+            row.master_pdf_rebuild_status === 'pending'
+                ? 'El PDF consolidado todavía se está actualizando.'
+                : 'No se pudo actualizar el PDF consolidado. Abra el expediente para reintentar.';
         viewerState.value = 'error';
         return;
     }
@@ -260,21 +292,21 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="space-y-6">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start space-x-4 sm:items-center">
                 <RouterLink
                     to="/main"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                    class="inline-flex min-h-11 items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                 >
                     <ArrowLeft class="mr-2 h-4 w-4" />
                     Volver
                 </RouterLink>
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-900">Expedientes</h1>
-                    <p class="text-gray-600">Gestiona todos los expedientes del sistema</p>
+                    <h1 class="text-3xl font-bold text-gray-900">Expedientes</h1>
+                    <p class="mt-1 text-base text-gray-600">Consulta y administra los expedientes del sistema</p>
                 </div>
             </div>
-            <Button variant="primary" @click="showCreateModal = true">
+            <Button class="min-h-12 text-base" variant="primary" size="lg" @click="showCreateModal = true">
                 <template #icon>
                     <Plus class="h-4 w-4" />
                 </template>
@@ -282,26 +314,38 @@ onBeforeUnmount(() => {
             </Button>
         </div>
 
-        <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <form class="flex space-x-4" @submit.prevent="handleSearch">
+        <div class="rounded-2xl border-2 border-gray-300 bg-white p-6 shadow-md sm:p-8">
+            <div class="mb-4">
+                <label for="expediente-search" class="block text-xl font-bold text-gray-900">
+                    Buscar expedientes
+                </label>
+                <p id="expediente-search-help" class="mt-1 text-base text-gray-600">
+                    Escriba un número, materia, juzgado o nombre relacionado con el expediente.
+                </p>
+            </div>
+            <form class="flex flex-col gap-3 sm:flex-row" role="search" @submit.prevent="handleSearch">
                 <div class="flex-1">
                     <div class="relative">
-                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Search class="h-5 w-5 text-gray-400" />
+                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                            <Search class="h-7 w-7 text-gray-500" />
                         </div>
                         <input
+                            id="expediente-search"
                             v-model="searchTerm"
                             type="text"
-                            placeholder="Buscar por número de expediente..."
-                            class="block w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-3 leading-5 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500"
+                            aria-describedby="expediente-search-help"
+                            placeholder="Ejemplo: 12345-2024 o materia civil"
+                            class="block min-h-14 w-full rounded-xl border-2 border-gray-400 bg-white py-3 pl-14 pr-4 text-lg leading-6 text-gray-900 shadow-sm placeholder-gray-500 focus:border-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200"
                         />
                     </div>
                 </div>
-                <Button type="submit" variant="outline">Buscar</Button>
+                <Button class="min-h-14 text-base" type="submit" variant="outline" size="lg">Buscar</Button>
                 <Button
                     v-if="searchTerm"
+                    class="min-h-14 text-base"
                     type="button"
                     variant="outline"
+                    size="lg"
                     @click="searchTerm = ''"
                 >
                     Limpiar
@@ -320,32 +364,57 @@ onBeforeUnmount(() => {
             empty-message="No se encontraron expedientes"
             @row-click="handleRowClick"
         >
-            <template #cell-archivo="{ value }">
+            <template #cell-numero="{ value }">
+                <span class="text-base font-semibold text-gray-900">{{ value }}</span>
+            </template>
+
+            <template #cell-materia="{ value }">
                 <span
-                    class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    :class="value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                    class="block max-w-[12rem] truncate text-base text-gray-800"
+                    :title="String(value || 'Sin registrar')"
                 >
-                    {{ value ? 'Sí' : 'No' }}
+                    {{ value || 'Sin registrar' }}
+                </span>
+            </template>
+
+            <template #cell-estado="{ value }">
+                <span
+                    class="block max-w-[12rem] truncate text-base font-medium capitalize text-gray-800"
+                    :title="String(value || 'Sin estado')"
+                >
+                    {{ value || 'Sin estado' }}
                 </span>
             </template>
 
             <template #cell-acciones="{ row }">
-                <div class="flex items-center justify-end space-x-2">
+                <div class="grid min-w-[18rem] grid-cols-1 gap-2 lg:min-w-[34rem] lg:grid-cols-3">
                     <button
                         type="button"
-                        class="rounded p-1.5 text-gray-700 transition-colors hover:bg-gray-100"
-                        title="Visualizar documento"
-                        @click.stop="handleViewClick(row)"
+                        class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                        @click.stop="handleRowClick(row)"
                     >
-                        <Eye class="h-4 w-4" />
+                        <FolderOpen class="mr-2 h-5 w-5" aria-hidden="true" />
+                        Ver expediente
                     </button>
                     <button
                         type="button"
-                        class="rounded p-1.5 text-blue-700 transition-colors hover:bg-blue-100"
-                        title="Actualizar expediente"
-                        @click.stop="handleSelectForUpdate(row)"
+                        class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="!canViewMasterPdf(row)"
+                        :title="masterPdfActionTitle(row)"
+                        @click.stop="handleViewClick(row)"
                     >
-                        <FileText class="h-4 w-4" />
+                        <Eye class="mr-2 h-5 w-5" aria-hidden="true" />
+                        {{ masterPdfActionLabel(row) }}
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="!row.archivo"
+                        :title="row.archivo ? 'Editar documento' : 'Este expediente no tiene un documento asociado'"
+                        @click.stop="handleEditDocument(row)"
+                    >
+                        <FilePenLine class="mr-2 h-5 w-5" aria-hidden="true" />
+                        Editar documento
                     </button>
                 </div>
             </template>
@@ -383,20 +452,6 @@ onBeforeUnmount(() => {
             @close="showCreateModal = false"
         >
             <ExpedienteForm @success="handleCreateSuccess" @cancel="showCreateModal = false" />
-        </Modal>
-
-        <Modal
-            :open="showUpdateModal"
-            title="Actualizar Expediente"
-            size="xl"
-            @close="showUpdateModal = false"
-        >
-            <ExpedienteForm
-                v-if="selectedExpediente"
-                :expediente="selectedExpediente"
-                @success="handleUpdateSuccess"
-                @cancel="showUpdateModal = false"
-            />
         </Modal>
 
         <Modal :open="showViewerModal" :title="viewerTitle" size="full" @close="closeViewerModal">

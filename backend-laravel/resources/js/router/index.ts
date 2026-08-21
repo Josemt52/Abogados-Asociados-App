@@ -48,6 +48,12 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/expedientes/:expedienteId/documentos/:type(expediente|resolucion)/:documentId/editar',
+    name: 'onlyoffice-editor',
+    component: () => import('@/pages/OnlyOfficeEdit/OnlyOfficeEdit.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/main',
   },
@@ -82,4 +88,3 @@ router.beforeEach((to) => {
 });
 
 export default router;
-
