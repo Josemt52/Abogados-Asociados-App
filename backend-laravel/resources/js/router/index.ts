@@ -15,6 +15,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/pages/Login/Login.vue'),
   },
   {
+    path: '/expedientes/:expedienteId/resoluciones/:resolucionId/editar',
+    name: 'resolution-editor',
+    component: () => import('@/pages/ResolutionEdit/ResolutionEdit.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/',
     component: () => import('@/components/Layout/Layout.vue'),
     meta: { requiresAuth: true },
@@ -82,4 +88,3 @@ router.beforeEach((to) => {
 });
 
 export default router;
-

@@ -34,7 +34,11 @@ Route::middleware('auth:api')->group(function () {
     // Resoluciones endpoints
     Route::get('/expedientes/{id}/resoluciones', [ResolucionController::class, 'index']);
     Route::post('/expedientes/{id}/resoluciones/confirmar-inicial', [ResolucionController::class, 'confirmarInicial']);
+    Route::post('/expedientes/{id}/resoluciones/siguiente/editor', [ResolucionController::class, 'iniciarEditor']);
     Route::post('/expedientes/{id}/resoluciones/siguiente', [ResolucionController::class, 'siguiente']);
+    Route::get('/expedientes/{id}/resoluciones/{resolucionId}/editor', [ResolucionController::class, 'editor']);
+    Route::put('/expedientes/{id}/resoluciones/{resolucionId}/editor', [ResolucionController::class, 'guardarEditor']);
+    Route::post('/expedientes/{id}/resoluciones/{resolucionId}/finalizar-editor', [ResolucionController::class, 'finalizarEditor']);
     Route::get('/expedientes/{id}/resoluciones/{resolucionId}/download', [ResolucionController::class, 'descargar']);
     Route::post('/expedientes/{id}/resoluciones/{resolucionId}/completar', [ResolucionController::class, 'completar']);
 

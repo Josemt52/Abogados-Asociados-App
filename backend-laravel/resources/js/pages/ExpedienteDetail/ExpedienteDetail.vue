@@ -39,11 +39,13 @@ const statusLoading = ref(false);
 const initialResolutionNumber = ref(0);
 const initialResolutionLoading = ref(false);
 const generatingResolution = ref(false);
+const openingResolutionEditor = ref(false);
 const completingResolution = ref(false);
 const downloadingResolutionId = ref<number | null>(null);
 const completionResolutionId = ref<number | null>(null);
 const completionResolutionNumber = ref<number | null>(null);
 const hasPromptedInitialResolution = ref(false);
+const openEditorAfterInitialConfirmation = ref(false);
 const loading = ref(false);
 const isGenerating = ref(false);
 const expediente = ref<Expediente | null>(null);
@@ -52,6 +54,7 @@ const expedienteLoading = ref(true);
 const resolucionesLoading = ref(true);
 const resolucionesError = ref<string | null>(null);
 let refetchRequestId = 0;
+let routeLoadRequestId = 0;
 
 const rawId = computed(() => {
     const routeId = route.params.id;
@@ -263,6 +266,11 @@ const handleConfirmInitialResolution = async (): Promise<void> => {
                 : `Última resolución confirmada: ${numero}.`,
         );
         await refetch();
+
+        if (openEditorAfterInitialConfirmation.value) {
+            openEditorAfterInitialConfirmation.value = false;
+            await handleOpenResolutionEditor();
+        }
     } catch (error) {
         console.error('Error confirming initial resolution', error);
         toast.error(
@@ -279,7 +287,40 @@ const openPendingResolution = (resolucion: Resolucion): void => {
     showCompleteResolutionModal.value = true;
 };
 
-const handleGenerateNextResolution = async (): Promise<void> => {
+const handleOpenResolutionEditor = async (): Promise<void> => {
+    if (!resolutionHistoryReady.value) {
+        toast.error('El historial de resoluciones no está disponible. Vuelve a intentarlo.');
+        return;
+    }
+
+    if (expediente.value?.ultima_resolucion == null) {
+        openEditorAfterInitialConfirmation.value = true;
+        showInitialResolutionModal.value = true;
+        return;
+    }
+
+    try {
+        openingResolutionEditor.value = true;
+        const editor = await expedientesAPI.iniciarEditorResolucion(expedienteId.value);
+
+        await router.push({
+            name: 'resolution-editor',
+            params: {
+                expedienteId: editor.expediente_id,
+                resolucionId: editor.resolucion_id,
+            },
+        });
+    } catch (error) {
+        console.error('Error opening resolution editor', error);
+        toast.error(
+            await getApiErrorMessage(error, 'No se pudo abrir el editor de la resolución.'),
+        );
+    } finally {
+        openingResolutionEditor.value = false;
+    }
+};
+
+const handleDownloadResolutionTemplate = async (): Promise<void> => {
     if (!resolutionHistoryReady.value) {
         toast.error('El historial de resoluciones no está disponible. Vuelve a intentarlo.');
         return;
@@ -301,7 +342,7 @@ const handleGenerateNextResolution = async (): Promise<void> => {
         toast.success(`Plantilla de la resolución ${plantilla.numero} descargada.`);
         await refetch();
     } catch (error) {
-        console.error('Error generating next resolution', error);
+        console.error('Error downloading resolution template', error);
         toast.error(
             await getApiErrorMessage(error, 'No se pudo generar la siguiente resolución.'),
         );
@@ -402,6 +443,36 @@ const handleUpdateStatus = async (): Promise<void> => {
     }
 };
 
+const closeInitialResolutionModal = (): void => {
+    openEditorAfterInitialConfirmation.value = false;
+    showInitialResolutionModal.value = false;
+};
+
+const loadRouteAndMaybeOpenEditor = async (
+    requestedRawId: string,
+    shouldOpenEditor: boolean,
+): Promise<void> => {
+    const requestId = ++routeLoadRequestId;
+    await refetch();
+
+    if (
+        !shouldOpenEditor ||
+        requestId !== routeLoadRequestId ||
+        rawId.value !== requestedRawId ||
+        route.query.editor !== 'true'
+    ) {
+        return;
+    }
+
+    const query = { ...route.query };
+    delete query.editor;
+    await router.replace({ query });
+
+    if (requestId === routeLoadRequestId && rawId.value === requestedRawId) {
+        await handleOpenResolutionEditor();
+    }
+};
+
 watch(
     rawId,
     (id) => {
@@ -412,11 +483,21 @@ watch(
         }
 
         hasPromptedInitialResolution.value = false;
+        openEditorAfterInitialConfirmation.value = false;
         showInitialResolutionModal.value = false;
         showCompleteResolutionModal.value = false;
-        void refetch();
+        void loadRouteAndMaybeOpenEditor(id, route.query.editor === 'true');
     },
     { immediate: true },
+);
+
+watch(
+    () => route.query.editor,
+    (editor, previousEditor) => {
+        if (editor === 'true' && previousEditor !== 'true' && rawId.value) {
+            void loadRouteAndMaybeOpenEditor(rawId.value, true);
+        }
+    },
 );
 </script>
 
@@ -623,7 +704,7 @@ watch(
                                                 ? resolucion.nombre_archivo || 'Documento incorporado'
                                                 : resolucion.estado === 'base'
                                                   ? 'Documento original usado como base del expediente'
-                                                  : 'Pendiente de subir el Word terminado'
+                                                  : 'Pendiente de editar o subir el Word terminado'
                                         }}
                                         •
                                         {{
@@ -634,18 +715,32 @@ watch(
                                     </p>
                                 </div>
                             </div>
-                            <div class="flex items-center space-x-2">
+                            <div class="flex flex-wrap items-center justify-end gap-2">
+                                <Button
+                                    v-if="resolucion.estado === 'pendiente'"
+                                    variant="primary"
+                                    size="sm"
+                                    :loading="openingResolutionEditor"
+                                    :disabled="generatingResolution"
+                                    @click="handleOpenResolutionEditor"
+                                >
+                                    <template #icon>
+                                        <Edit class="h-4 w-4" />
+                                    </template>
+                                    Editar en línea
+                                </Button>
                                 <Button
                                     v-if="resolucion.estado === 'pendiente'"
                                     variant="outline"
                                     size="sm"
                                     :loading="generatingResolution"
-                                    @click="handleGenerateNextResolution"
+                                    :disabled="openingResolutionEditor"
+                                    @click="handleDownloadResolutionTemplate"
                                 >
                                     <template #icon>
                                         <Download class="h-4 w-4" />
                                     </template>
-                                    Descargar plantilla
+                                    Descargar Word
                                 </Button>
                                 <Button
                                     v-else-if="resolucion.nombre_archivo"
@@ -683,10 +778,10 @@ watch(
                     <div class="space-y-3">
                         <Button
                             variant="primary"
-                            :loading="generatingResolution"
-                            :disabled="!resolutionHistoryReady"
+                            :loading="openingResolutionEditor"
+                            :disabled="!resolutionHistoryReady || generatingResolution"
                             class="w-full justify-start"
-                            @click="handleGenerateNextResolution"
+                            @click="handleOpenResolutionEditor"
                         >
                             <template #icon>
                                 <FilePlus2 class="h-4 w-4" />
@@ -694,14 +789,29 @@ watch(
                             <template v-if="resolucionesLoading">Cargando resoluciones...</template>
                             <template v-else-if="resolucionesError">Historial no disponible</template>
                             <template v-else-if="pendingResolution">
-                                Descargar plantilla {{ pendingResolution.numero }}
+                                Continuar resolución {{ pendingResolution.numero }}
                             </template>
                             <template v-else-if="expediente.ultima_resolucion == null">
                                 Configurar resoluciones
                             </template>
                             <template v-else>
-                                Crear resolución {{ nextResolutionNumber }}
+                                Redactar resolución {{ nextResolutionNumber }}
                             </template>
+                        </Button>
+
+                        <Button
+                            v-if="resolutionHistoryReady && expediente.ultima_resolucion != null"
+                            variant="outline"
+                            :loading="generatingResolution"
+                            :disabled="openingResolutionEditor"
+                            class="w-full justify-start"
+                            @click="handleDownloadResolutionTemplate"
+                        >
+                            <template #icon>
+                                <Download class="h-4 w-4" />
+                            </template>
+                            Descargar plantilla Word
+                            {{ pendingResolution?.numero ?? nextResolutionNumber }}
                         </Button>
 
                         <Button
@@ -781,7 +891,7 @@ watch(
             :open="showInitialResolutionModal"
             title="Confirmar última resolución"
             size="md"
-            @close="showInitialResolutionModal = false"
+            @close="closeInitialResolutionModal"
         >
             <div class="space-y-5">
                 <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
@@ -816,7 +926,7 @@ watch(
                 </div>
 
                 <div class="flex justify-end space-x-3">
-                    <Button variant="outline" @click="showInitialResolutionModal = false">Ahora no</Button>
+                    <Button variant="outline" @click="closeInitialResolutionModal">Ahora no</Button>
                     <Button
                         variant="primary"
                         :loading="initialResolutionLoading"

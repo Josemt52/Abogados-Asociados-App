@@ -2,19 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\DocumentConversionException;
 use App\Http\Controllers\Controller;
-use App\Models\Archivo;
 use App\Models\Expediente;
 use App\Models\Resolucion;
-use App\Services\DocumentConversionService;
-use App\Services\PdfMergeService;
+use App\Services\ResolutionCompletionService;
+use App\Services\ResolutionRichTextService;
 use App\Services\ResolutionTemplateService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use Throwable;
 
 class ResolucionController extends Controller
 {
@@ -30,6 +27,8 @@ class ResolucionController extends Controller
                 'es_documento_base',
                 'nombre_archivo',
                 'tipo_archivo',
+                'version_editor',
+                'contenido_editado_at',
                 'completada_at',
                 'created_at',
                 'updated_at',
@@ -130,7 +129,277 @@ class ResolucionController extends Controller
         string $id,
         ResolutionTemplateService $templates
     ) {
-        [$expediente, $resolution, $originalDocumentName] = DB::transaction(function () use ($id) {
+        [$expediente, $resolution, $originalDocumentName] = $this->pendingResolution($id);
+        $downloadName = $templates->downloadName(
+            $expediente,
+            $resolution->numero,
+            $originalDocumentName
+        );
+
+        if ($resolution->documento_data !== null) {
+            $storedDocument = base64_decode($resolution->documento_data, true);
+
+            if (is_string($storedDocument) && str_starts_with($storedDocument, "PK\x03\x04")) {
+                return response()->streamDownload(
+                    static function () use ($storedDocument): void {
+                        echo $storedDocument;
+                    },
+                    $downloadName,
+                    [
+                        'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'X-Resolucion-Id' => (string) $resolution->id,
+                        'X-Resolucion-Numero' => (string) $resolution->numero,
+                    ]
+                );
+            }
+        }
+
+        $path = $templates->generate($expediente, $resolution->numero);
+
+        return response()->download(
+            $path,
+            $downloadName,
+            [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'X-Resolucion-Id' => (string) $resolution->id,
+                'X-Resolucion-Numero' => (string) $resolution->numero,
+            ]
+        )->deleteFileAfterSend(true);
+    }
+
+    public function iniciarEditor(
+        string $id,
+        ResolutionRichTextService $richText,
+        ResolutionTemplateService $templates
+    ) {
+        [$expediente, $resolution, $originalDocumentName] = $this->pendingResolution($id);
+
+        if ($resolution->contenido_editor === null) {
+            $content = $richText->emptyDocument();
+            $fileName = $templates->downloadName(
+                $expediente,
+                $resolution->numero,
+                $originalDocumentName
+            );
+            $binary = $richText->generateDocx($expediente, $resolution, $content);
+
+            $resolution = DB::transaction(function () use (
+                $expediente,
+                $resolution,
+                $content,
+                $fileName,
+                $binary
+            ): Resolucion {
+                $locked = Resolucion::where('expediente_id', $expediente->id)
+                    ->lockForUpdate()
+                    ->findOrFail($resolution->id);
+
+                if ($locked->estado !== Resolucion::ESTADO_PENDIENTE) {
+                    throw new HttpResponseException(response()->json([
+                        'message' => 'La resolución ya no está disponible para edición.',
+                    ], 409));
+                }
+
+                if ($locked->contenido_editor === null) {
+                    $locked->fill([
+                        'contenido_editor' => $content,
+                        'esquema_editor' => ResolutionRichTextService::SCHEMA_VERSION,
+                        'nombre_archivo' => $fileName,
+                        'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'documento_data' => base64_encode($binary),
+                    ])->save();
+                }
+
+                return $locked->fresh();
+            });
+        }
+
+        return response()->json($this->editorPayload($expediente, $resolution, $richText));
+    }
+
+    public function editor(
+        string $id,
+        string $resolucionId,
+        ResolutionRichTextService $richText
+    ) {
+        $expediente = Expediente::findOrFail($id);
+        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
+        $this->assertPendingNext($expediente, $resolution);
+
+        if ($resolution->contenido_editor === null) {
+            return response()->json([
+                'message' => 'Esta resolución todavía no fue preparada para el editor.',
+            ], 409);
+        }
+
+        return response()->json($this->editorPayload($expediente, $resolution, $richText));
+    }
+
+    public function guardarEditor(
+        Request $request,
+        string $id,
+        string $resolucionId,
+        ResolutionRichTextService $richText,
+        ResolutionTemplateService $templates
+    ) {
+        $validated = $request->validate([
+            'content' => ['required', 'array'],
+            'version' => ['required', 'integer', 'min:0'],
+        ]);
+        $content = $richText->normalize($validated['content']);
+        $expectedVersion = (int) $validated['version'];
+        $expediente = Expediente::findOrFail($id);
+        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
+        $this->assertPendingNext($expediente, $resolution);
+
+        if ((int) $resolution->version_editor !== $expectedVersion) {
+            throw new HttpResponseException(response()->json([
+                'message' => 'La resolución fue modificada en otra ventana. Recarga el editor antes de guardar.',
+            ], 409));
+        }
+
+        $originalDocumentName = $this->originalDocumentName($expediente);
+        $fileName = $templates->downloadName(
+            $expediente,
+            $resolution->numero,
+            $originalDocumentName
+        );
+        $binary = $richText->generateDocx($expediente, $resolution, $content);
+
+        $resolution = DB::transaction(function () use (
+            $id,
+            $resolucionId,
+            $expectedVersion,
+            $content,
+            $fileName,
+            $binary
+        ): Resolucion {
+            $lockedExpediente = Expediente::lockForUpdate()->findOrFail($id);
+            $lockedResolution = Resolucion::where('expediente_id', $id)
+                ->lockForUpdate()
+                ->findOrFail($resolucionId);
+            $this->assertPendingNext($lockedExpediente, $lockedResolution);
+
+            if ((int) $lockedResolution->version_editor !== $expectedVersion) {
+                throw new HttpResponseException(response()->json([
+                    'message' => 'La resolución fue modificada en otra ventana. Recarga el editor antes de guardar.',
+                ], 409));
+            }
+
+            $lockedResolution->fill([
+                'contenido_editor' => $content,
+                'esquema_editor' => ResolutionRichTextService::SCHEMA_VERSION,
+                'version_editor' => $expectedVersion + 1,
+                'contenido_editado_at' => now(),
+                'nombre_archivo' => $fileName,
+                'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'documento_data' => base64_encode($binary),
+            ])->save();
+
+            return $lockedResolution->fresh();
+        });
+
+        return response()->json($this->editorPayload($expediente->fresh(), $resolution, $richText));
+    }
+
+    public function finalizarEditor(
+        Request $request,
+        string $id,
+        string $resolucionId,
+        ResolutionRichTextService $richText,
+        ResolutionTemplateService $templates,
+        ResolutionCompletionService $completion
+    ) {
+        $validated = $request->validate([
+            'version' => ['required', 'integer', 'min:0'],
+        ]);
+        $expectedVersion = (int) $validated['version'];
+        $expediente = Expediente::findOrFail($id);
+        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
+        $this->assertPendingNext($expediente, $resolution);
+
+        if ((int) $resolution->version_editor !== $expectedVersion) {
+            throw new HttpResponseException(response()->json([
+                'message' => 'La resolución cambió antes de finalizarse. Recarga el editor.',
+            ], 409));
+        }
+
+        if (! is_array($resolution->contenido_editor)) {
+            return response()->json(['message' => 'Primero guarda el contenido de la resolución.'], 422);
+        }
+
+        $content = $richText->normalize($resolution->contenido_editor);
+
+        if (! $richText->hasMeaningfulContent($content)) {
+            return response()->json(['message' => 'Escribe el contenido de la resolución antes de finalizarla.'], 422);
+        }
+
+        $fileName = $templates->downloadName(
+            $expediente,
+            $resolution->numero,
+            $this->originalDocumentName($expediente)
+        );
+        $binary = $richText->generateDocx($expediente, $resolution, $content);
+
+        try {
+            $result = $completion->complete(
+                (int) $expediente->id,
+                (int) $resolution->id,
+                $binary,
+                $fileName,
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                $expectedVersion,
+                true
+            );
+        } catch (DocumentConversionException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    public function completar(
+        Request $request,
+        string $id,
+        string $resolucionId,
+        ResolutionCompletionService $completion
+    ) {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:doc,docx', 'extensions:doc,docx', 'max:10240'],
+        ]);
+
+        $expediente = Expediente::findOrFail($id);
+        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
+        $this->assertPendingNext($expediente, $resolution);
+
+        $uploadedFile = $request->file('file');
+        $fileName = $uploadedFile->getClientOriginalName();
+        $mimeType = $this->normalizeWordMime($fileName);
+        $wordBinary = file_get_contents($uploadedFile->getRealPath());
+
+        if ($wordBinary === false || $wordBinary === '') {
+            return response()->json(['message' => 'El documento Word está vacío o no se pudo leer.'], 422);
+        }
+
+        try {
+            $result = $completion->complete(
+                (int) $expediente->id,
+                (int) $resolution->id,
+                $wordBinary,
+                $fileName,
+                $mimeType
+            );
+        } catch (DocumentConversionException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json($result);
+    }
+
+    /** @return array{0: Expediente, 1: Resolucion, 2: ?string} */
+    private function pendingResolution(string $id): array
+    {
+        return DB::transaction(function () use ($id): array {
             $expediente = Expediente::lockForUpdate()->findOrFail($id);
 
             if ($expediente->ultima_resolucion === null) {
@@ -166,41 +435,39 @@ class ResolucionController extends Controller
                 ], 409));
             }
 
-            $originalDocumentName = $expediente->resoluciones()
-                ->where('es_documento_base', true)
-                ->whereNotNull('nombre_archivo')
-                ->value('nombre_archivo');
-
-            return [$expediente, $resolution, $originalDocumentName];
+            return [$expediente, $resolution, $this->originalDocumentName($expediente)];
         });
-
-        $path = $templates->generate($expediente, $resolution->numero);
-
-        return response()->download(
-            $path,
-            $templates->downloadName($expediente, $resolution->numero, $originalDocumentName),
-            [
-                'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'X-Resolucion-Id' => (string) $resolution->id,
-                'X-Resolucion-Numero' => (string) $resolution->numero,
-            ]
-        )->deleteFileAfterSend(true);
     }
 
-    public function completar(
-        Request $request,
-        string $id,
-        string $resolucionId,
-        DocumentConversionService $converter,
-        PdfMergeService $merger
-    ) {
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:doc,docx', 'extensions:doc,docx', 'max:10240'],
-        ]);
+    private function originalDocumentName(Expediente $expediente): ?string
+    {
+        return $expediente->resoluciones()
+            ->where('es_documento_base', true)
+            ->whereNotNull('nombre_archivo')
+            ->value('nombre_archivo');
+    }
 
-        $expediente = Expediente::with('archivoData')->findOrFail($id);
-        $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
+    /** @return array<string, mixed> */
+    private function editorPayload(
+        Expediente $expediente,
+        Resolucion $resolution,
+        ResolutionRichTextService $richText
+    ): array {
+        return [
+            'expediente_id' => (int) $expediente->id,
+            'resolucion_id' => (int) $resolution->id,
+            'numero' => (int) $resolution->numero,
+            'estado' => $resolution->estado,
+            'document_name' => $resolution->nombre_archivo,
+            'header' => $richText->headerFields($expediente),
+            'content' => $resolution->contenido_editor ?? $richText->emptyDocument(),
+            'version' => (int) $resolution->version_editor,
+            'saved_at' => $resolution->contenido_editado_at?->toIso8601String(),
+        ];
+    }
 
+    private function assertPendingNext(Expediente $expediente, Resolucion $resolution): void
+    {
         if ($resolution->estado !== Resolucion::ESTADO_PENDIENTE
             || $expediente->ultima_resolucion === null
             || $resolution->numero !== $expediente->ultima_resolucion + 1) {
@@ -208,112 +475,6 @@ class ResolucionController extends Controller
                 'message' => 'La resolución no está pendiente o no es la siguiente del expediente.',
             ], 409));
         }
-
-        $uploadedFile = $request->file('file');
-        $fileName = $uploadedFile->getClientOriginalName();
-        $mimeType = $this->normalizeWordMime($fileName);
-        $wordBinary = file_get_contents($uploadedFile->getRealPath());
-
-        if ($wordBinary === false || $wordBinary === '') {
-            return response()->json(['message' => 'El documento Word está vacío o no se pudo leer.'], 422);
-        }
-
-        $storedDocumentFingerprint = $expediente->archivoData === null
-            ? null
-            : hash('sha256', (string) $expediente->archivoData->documento_data);
-
-        try {
-            $newResolutionPdf = $expediente->archivoData === null
-                ? $converter->convertToPdfStrict($wordBinary, $fileName, $mimeType)
-                : $converter->convertResolutionToPdfStrict($wordBinary, $fileName, $mimeType);
-            $documentsToMerge = [];
-
-            if ($expediente->archivoData !== null) {
-                $storedBinary = base64_decode($expediente->archivoData->documento_data, true);
-
-                if ($storedBinary === false || $storedBinary === '') {
-                    throw new \RuntimeException('El documento consolidado almacenado no es válido.');
-                }
-
-                $documentsToMerge[] = $converter->convertToPdfStrict(
-                    $storedBinary,
-                    $expediente->archivoData->nombre_archivo,
-                    $expediente->archivoData->tipo_archivo
-                );
-            }
-
-            $documentsToMerge[] = $newResolutionPdf;
-            $consolidatedPdf = $merger->merge($documentsToMerge);
-        } catch (Throwable $exception) {
-            Log::warning('No se pudo consolidar una resolución', [
-                'expediente_id' => $expediente->id,
-                'resolucion_id' => $resolution->id,
-                'error' => $exception->getMessage(),
-            ]);
-
-            return response()->json([
-                'message' => 'No se pudo convertir o consolidar el documento. La resolución continúa pendiente.',
-            ], 422);
-        }
-
-        $result = DB::transaction(function () use (
-            $id,
-            $resolucionId,
-            $fileName,
-            $mimeType,
-            $wordBinary,
-            $consolidatedPdf,
-            $storedDocumentFingerprint
-        ) {
-            $lockedExpediente = Expediente::lockForUpdate()->findOrFail($id);
-            $lockedResolution = Resolucion::where('expediente_id', $id)
-                ->lockForUpdate()
-                ->findOrFail($resolucionId);
-            $lockedArchivo = Archivo::where('expediente_id', $id)->lockForUpdate()->first();
-            $currentFingerprint = $lockedArchivo === null
-                ? null
-                : hash('sha256', (string) $lockedArchivo->documento_data);
-
-            if ($lockedResolution->estado !== Resolucion::ESTADO_PENDIENTE
-                || $lockedExpediente->ultima_resolucion === null
-                || $lockedResolution->numero !== $lockedExpediente->ultima_resolucion + 1
-                || $currentFingerprint !== $storedDocumentFingerprint) {
-                throw new HttpResponseException(response()->json([
-                    'message' => 'El expediente cambió durante la consolidación. Vuelve a intentarlo.',
-                ], 409));
-            }
-
-            $lockedResolution->fill([
-                'estado' => Resolucion::ESTADO_COMPLETADA,
-                'es_documento_base' => false,
-                'nombre_archivo' => $fileName,
-                'tipo_archivo' => $mimeType,
-                'documento_data' => base64_encode($wordBinary),
-                'completada_at' => now(),
-            ])->save();
-
-            $safeNumber = Str::slug($lockedExpediente->numero, '_');
-            $pdfName = "expediente_{$safeNumber}_resolucion_{$lockedResolution->numero}.pdf";
-            $archivo = $lockedArchivo ?? new Archivo(['expediente_id' => $lockedExpediente->id]);
-            $archivo->fill([
-                'nombre_archivo' => $pdfName,
-                'tipo_archivo' => 'application/pdf',
-                'documento_data' => base64_encode($consolidatedPdf),
-            ])->save();
-
-            $lockedExpediente->fill([
-                'archivo' => true,
-                'nombre_archivo' => $pdfName,
-                'ultima_resolucion' => $lockedResolution->numero,
-            ])->save();
-
-            return [
-                'expediente' => $lockedExpediente->fresh(),
-                'resolucion' => $lockedResolution->fresh(),
-            ];
-        });
-
-        return response()->json($result);
     }
 
     private function normalizeWordMime(string $fileName): string

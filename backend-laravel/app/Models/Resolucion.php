@@ -23,6 +23,10 @@ class Resolucion extends Model
         'nombre_archivo',
         'tipo_archivo',
         'documento_data',
+        'contenido_editor',
+        'esquema_editor',
+        'version_editor',
+        'contenido_editado_at',
         'completada_at',
     ];
 
@@ -35,6 +39,10 @@ class Resolucion extends Model
         return [
             'numero' => 'integer',
             'es_documento_base' => 'boolean',
+            'contenido_editor' => 'array',
+            'esquema_editor' => 'integer',
+            'version_editor' => 'integer',
+            'contenido_editado_at' => 'datetime',
             'completada_at' => 'datetime',
         ];
     }

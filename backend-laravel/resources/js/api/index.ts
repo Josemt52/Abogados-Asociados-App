@@ -14,6 +14,9 @@ export type {
     Resolucion,
     ResolucionEstado,
     ResolucionesSnapshot,
+    ResolutionEditorCompletion,
+    ResolutionEditorHeaderField,
+    ResolutionEditorPayload,
     UpdateExpedienteData,
 } from './expedientes';
 export type { CreateUsuarioData, UpdateUsuarioData, Usuario } from './usuarios';

@@ -334,6 +334,130 @@ class ResolutionWorkflowTest extends TestCase
         $this->assertDatabaseMissing('archivos', ['expediente_id' => $expediente->id]);
     }
 
+    public function test_lightweight_editor_saves_a_versioned_draft_and_only_advances_when_finalized(): void
+    {
+        $this->authenticate();
+        $expediente = Expediente::create([
+            'numero' => 'EXP-EDITOR-001',
+            'materia' => 'Proceso civil',
+            'archivo' => false,
+            'ultima_resolucion' => 0,
+        ]);
+        $content = [
+            'type' => 'doc',
+            'content' => [[
+                'type' => 'paragraph',
+                'attrs' => ['textAlign' => 'center'],
+                'content' => [[
+                    'type' => 'text',
+                    'text' => 'Contenido redactado dentro de la aplicación.',
+                    'marks' => [['type' => 'bold']],
+                ]],
+            ]],
+        ];
+
+        $started = $this->postJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/siguiente/editor'
+        );
+        $started
+            ->assertOk()
+            ->assertJsonPath('numero', 1)
+            ->assertJsonPath('version', 0)
+            ->assertJsonPath('content.type', 'doc');
+        $resolutionId = $started->json('resolucion_id');
+
+        $saved = $this->putJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
+            ['content' => $content, 'version' => 0]
+        );
+        $saved
+            ->assertOk()
+            ->assertJsonPath('version', 1)
+            ->assertJsonPath('content.content.0.content.0.text', 'Contenido redactado dentro de la aplicación.');
+        $this->assertDatabaseHas('expedientes', [
+            'id' => $expediente->id,
+            'ultima_resolucion' => 0,
+        ]);
+
+        $this->putJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
+            ['content' => $content, 'version' => 0]
+        )->assertConflict();
+
+        $convertedPdf = Pdf::loadHTML('<p>Resolución creada en el editor</p>')->output();
+        $this->mock(LibreOfficeService::class, function (MockInterface $mock) use ($convertedPdf): void {
+            $mock->shouldReceive('convertToPdf')
+                ->once()
+                ->withArgs(function (string $document, string $format): bool {
+                    return $format === 'docx'
+                        && str_contains($this->documentXml($document), 'Contenido redactado dentro de la aplicación.');
+                })
+                ->andReturn($convertedPdf);
+        });
+
+        $this->postJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/finalizar-editor',
+            ['version' => 1]
+        )->assertOk()
+            ->assertJsonPath('expediente.ultima_resolucion', 1)
+            ->assertJsonPath('resolucion.estado', Resolucion::ESTADO_COMPLETADA);
+
+        $this->assertDatabaseHas('resoluciones', [
+            'id' => $resolutionId,
+            'estado' => Resolucion::ESTADO_COMPLETADA,
+            'version_editor' => 2,
+        ]);
+        $this->assertNotNull(Resolucion::findOrFail($resolutionId)->contenido_editor);
+        $this->assertDatabaseHas('archivos', [
+            'expediente_id' => $expediente->id,
+            'tipo_archivo' => 'application/pdf',
+        ]);
+    }
+
+    public function test_lightweight_editor_keeps_the_saved_draft_when_final_conversion_fails(): void
+    {
+        $this->authenticate();
+        $expediente = Expediente::create([
+            'numero' => 'EXP-EDITOR-FAIL',
+            'archivo' => false,
+            'ultima_resolucion' => 3,
+        ]);
+        $started = $this->postJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/siguiente/editor'
+        );
+        $resolutionId = $started->json('resolucion_id');
+        $content = [
+            'type' => 'doc',
+            'content' => [[
+                'type' => 'paragraph',
+                'attrs' => ['textAlign' => 'left'],
+                'content' => [['type' => 'text', 'text' => 'Borrador que no debe perderse.']],
+            ]],
+        ];
+
+        $this->putJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
+            ['content' => $content, 'version' => 0]
+        )->assertOk()->assertJsonPath('version', 1);
+        $this->mock(LibreOfficeService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('convertToPdf')
+                ->once()
+                ->andThrow(new DocumentConversionException('LibreOffice no está disponible.'));
+        });
+
+        $this->postJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/finalizar-editor',
+            ['version' => 1]
+        )->assertUnprocessable();
+
+        $resolution = Resolucion::findOrFail($resolutionId);
+        $this->assertSame(Resolucion::ESTADO_PENDIENTE, $resolution->estado);
+        $this->assertSame(1, $resolution->version_editor);
+        $this->assertSame($content, $resolution->contenido_editor);
+        $this->assertSame(3, $expediente->fresh()->ultima_resolucion);
+        $this->assertDatabaseMissing('archivos', ['expediente_id' => $expediente->id]);
+    }
+
     public function test_completing_resolution_rejects_a_docx_with_a_false_extension(): void
     {
         $this->authenticate();

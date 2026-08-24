@@ -1,4 +1,5 @@
 import axios from './axios';
+import type { JSONContent } from '@tiptap/core';
 
 export interface ArchivoMetadata {
     id: number;
@@ -36,9 +37,33 @@ export interface Resolucion {
     es_documento_base: boolean;
     nombre_archivo: string | null;
     tipo_archivo?: string | null;
+    version_editor?: number;
+    contenido_editado_at?: string | null;
     created_at: string;
     updated_at: string;
     completada_at?: string | null;
+}
+
+export interface ResolutionEditorHeaderField {
+    label: string;
+    value: string;
+}
+
+export interface ResolutionEditorPayload {
+    expediente_id: number;
+    resolucion_id: number;
+    numero: number;
+    estado: ResolucionEstado;
+    document_name: string | null;
+    header: ResolutionEditorHeaderField[];
+    content: JSONContent;
+    version: number;
+    saved_at: string | null;
+}
+
+export interface ResolutionEditorCompletion {
+    expediente: Expediente;
+    resolucion: Resolucion;
 }
 
 export interface ResolucionesSnapshot {
@@ -69,6 +94,64 @@ export type UpdateExpedienteData = Partial<CreateExpedienteData>;
 
 const isNullableInteger = (value: unknown): value is number | null =>
     value === null || (typeof value === 'number' && Number.isInteger(value));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const isPositiveInteger = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value > 0;
+
+const isResolutionState = (value: unknown): value is ResolucionEstado =>
+    value === 'base' || value === 'pendiente' || value === 'completada';
+
+const isNullableString = (value: unknown): value is string | null =>
+    value === null || typeof value === 'string';
+
+const parseResolutionEditorPayload = (value: unknown): ResolutionEditorPayload => {
+    if (!isRecord(value)) {
+        throw new Error('El servidor devolvió un documento de resolución inválido.');
+    }
+
+    const header = value.header;
+    const content = value.content;
+    const validHeader =
+        Array.isArray(header) &&
+        header.every(
+            (field) =>
+                isRecord(field) &&
+                typeof field.label === 'string' &&
+                typeof field.value === 'string',
+        );
+    const validContent = isRecord(content) && content.type === 'doc';
+
+    if (
+        !isPositiveInteger(value.expediente_id) ||
+        !isPositiveInteger(value.resolucion_id) ||
+        !isPositiveInteger(value.numero) ||
+        !isResolutionState(value.estado) ||
+        !isNullableString(value.document_name) ||
+        !validHeader ||
+        !validContent ||
+        typeof value.version !== 'number' ||
+        !Number.isInteger(value.version) ||
+        value.version < 0 ||
+        !isNullableString(value.saved_at)
+    ) {
+        throw new Error('El servidor devolvió un documento de resolución inválido.');
+    }
+
+    return {
+        expediente_id: value.expediente_id,
+        resolucion_id: value.resolucion_id,
+        numero: value.numero,
+        estado: value.estado,
+        document_name: value.document_name,
+        header: header as ResolutionEditorHeaderField[],
+        content: content as JSONContent,
+        version: value.version,
+        saved_at: value.saved_at,
+    };
+};
 
 export const expedientesAPI = {
     async getAll(): Promise<Expediente[]> {
@@ -186,6 +269,52 @@ export const expedientesAPI = {
             : plainFilename || `resolucion_${numero}.docx`;
 
         return { blob: response.data, resolucionId, numero, filename };
+    },
+
+    async iniciarEditorResolucion(expedienteId: number): Promise<ResolutionEditorPayload> {
+        const response = await axios.post(
+            `/expedientes/${expedienteId}/resoluciones/siguiente/editor`,
+        );
+
+        return parseResolutionEditorPayload(response.data);
+    },
+
+    async getEditorResolucion(
+        expedienteId: number,
+        resolucionId: number,
+    ): Promise<ResolutionEditorPayload> {
+        const response = await axios.get(
+            `/expedientes/${expedienteId}/resoluciones/${resolucionId}/editor`,
+        );
+
+        return parseResolutionEditorPayload(response.data);
+    },
+
+    async guardarEditorResolucion(
+        expedienteId: number,
+        resolucionId: number,
+        content: JSONContent,
+        version: number,
+    ): Promise<ResolutionEditorPayload> {
+        const response = await axios.put(
+            `/expedientes/${expedienteId}/resoluciones/${resolucionId}/editor`,
+            { content, version },
+        );
+
+        return parseResolutionEditorPayload(response.data);
+    },
+
+    async finalizarEditorResolucion(
+        expedienteId: number,
+        resolucionId: number,
+        version: number,
+    ): Promise<ResolutionEditorCompletion> {
+        const response = await axios.post(
+            `/expedientes/${expedienteId}/resoluciones/${resolucionId}/finalizar-editor`,
+            { version },
+        );
+
+        return response.data as ResolutionEditorCompletion;
     },
 
     async completarResolucion(
