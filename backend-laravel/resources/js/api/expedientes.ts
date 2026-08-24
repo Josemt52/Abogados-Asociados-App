@@ -1,5 +1,4 @@
 import axios from './axios';
-import type { IConfig } from '@onlyoffice/document-editor-vue';
 
 export interface ArchivoMetadata {
     id: number;
@@ -23,11 +22,6 @@ export interface Expediente {
     archivo_data?: ArchivoMetadata | null;
     ultima_resolucion: number | null;
     resolucion_detectada?: number | null;
-    master_pdf_rebuild_version?: number;
-    master_pdf_rebuild_status?: 'ready' | 'pending' | 'failed';
-    master_pdf_rebuild_error?: string | null;
-    master_pdf_rebuild_requested_at?: string | null;
-    master_pdf_rebuilt_at?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -45,37 +39,6 @@ export interface Resolucion {
     created_at: string;
     updated_at: string;
     completada_at?: string | null;
-    onlyoffice_saved_at?: string | null;
-}
-
-export type OnlyOfficeDocumentType = 'expediente' | 'resolucion';
-export type OnlyOfficeMode = 'edit' | 'view';
-
-export interface OnlyOfficeDocumentMetadata {
-    type: OnlyOfficeDocumentType;
-    id: number;
-    fileName: string;
-}
-
-export interface OnlyOfficeSessionLease {
-    token: string;
-    version: number;
-    heartbeatIntervalSeconds: number;
-}
-
-export interface OnlyOfficeHeartbeat {
-    active: true;
-    version: number;
-    expiresAt: string;
-}
-
-export interface OnlyOfficeEditorSession {
-    documentServerUrl: string;
-    config: IConfig;
-    document: OnlyOfficeDocumentMetadata;
-    editable: boolean;
-    finalizable: boolean;
-    session: OnlyOfficeSessionLease | null;
 }
 
 export interface ResolucionesSnapshot {
@@ -107,124 +70,14 @@ export type UpdateExpedienteData = Partial<CreateExpedienteData>;
 const isNullableInteger = (value: unknown): value is number | null =>
     value === null || (typeof value === 'number' && Number.isInteger(value));
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    value !== null && typeof value === 'object' && !Array.isArray(value);
-
-const readString = (record: Record<string, unknown>, ...keys: string[]): string | null => {
-    for (const key of keys) {
-        const value = record[key];
-
-        if (typeof value === 'string' && value.trim()) {
-            return value.trim();
-        }
-    }
-
-    return null;
-};
-
-const readPositiveInteger = (value: unknown): number | null => {
-    const parsed = typeof value === 'number' ? value : Number(value);
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-};
-
-const normalizeOnlyOfficeSession = (
-    payload: unknown,
-    requestedType: OnlyOfficeDocumentType,
-    requestedId: number,
-): OnlyOfficeEditorSession => {
-    if (!isRecord(payload)) {
-        throw new Error('El servidor devolvió una configuración de edición inválida.');
-    }
-
-    const root = !('config' in payload) && isRecord(payload.data) ? payload.data : payload;
-    const documentServerUrl = readString(
-        root,
-        'documentServerUrl',
-        'document_server_url',
-        'serverUrl',
-    );
-    const config = root.config;
-
-    if (!documentServerUrl || !isRecord(config) || !isRecord(config.document)) {
-        throw new Error('La configuración de ONLYOFFICE está incompleta.');
-    }
-
-    const configDocument = config.document;
-    const requiredDocumentValues = ['fileType', 'key', 'title', 'url'];
-
-    if (
-        requiredDocumentValues.some(
-            (key) => typeof configDocument[key] !== 'string' || !configDocument[key],
-        )
-    ) {
-        throw new Error('La configuración del documento de ONLYOFFICE está incompleta.');
-    }
-
-    const document = isRecord(root.document)
-        ? root.document
-        : isRecord(root.metadata)
-          ? root.metadata
-          : isRecord(root.metadatos)
-            ? root.metadatos
-            : {};
-    const responseType = readString(document, 'type', 'tipo');
-    const normalizedType =
-        responseType === 'expediente' || responseType === 'resolucion'
-            ? responseType
-            : requestedType;
-    const documentId = readPositiveInteger(document.id) ?? requestedId;
-    const fileName =
-        readString(document, 'fileName', 'file_name', 'nombreArchivo', 'nombre_archivo') ??
-        String(configDocument.title);
-    const editorMode = isRecord(config.editorConfig)
-        ? readString(config.editorConfig, 'mode')
-        : null;
-    const editable =
-        typeof root.editable === 'boolean' ? root.editable : editorMode === 'edit';
-    const finalizable = typeof root.finalizable === 'boolean' ? root.finalizable : false;
-    const sessionPayload = root.session;
-    let editingSession: OnlyOfficeSessionLease | null = null;
-
-    if (sessionPayload !== null && sessionPayload !== undefined) {
-        if (!isRecord(sessionPayload)) {
-            throw new Error('La información de la sesión de edición es inválida.');
-        }
-
-        const token = readString(sessionPayload, 'token');
-        const version = readPositiveInteger(sessionPayload.version);
-        const heartbeatIntervalSeconds = readPositiveInteger(
-            sessionPayload.heartbeatIntervalSeconds ?? sessionPayload.heartbeat_interval_seconds,
-        );
-
-        if (!token || version === null || heartbeatIntervalSeconds === null) {
-            throw new Error('La información de la sesión de edición está incompleta.');
-        }
-
-        editingSession = { token, version, heartbeatIntervalSeconds };
-    }
-
-    return {
-        documentServerUrl: documentServerUrl.replace(/\/+$/, ''),
-        config: config as IConfig,
-        document: {
-            type: normalizedType,
-            id: documentId,
-            fileName,
-        },
-        editable,
-        finalizable,
-        session: editingSession,
-    };
-};
-
 export const expedientesAPI = {
     async getAll(): Promise<Expediente[]> {
         const response = await axios.get('/expedientes');
         return response.data;
     },
 
-    async getById(id: number, options: { silent?: boolean } = {}): Promise<Expediente> {
-        const response = await axios.get(`/expedientes/${id}`, options);
+    async getById(id: number): Promise<Expediente> {
+        const response = await axios.get(`/expedientes/${id}`);
         return response.data;
     },
 
@@ -366,44 +219,5 @@ export const expedientesAPI = {
             { responseType: 'blob' },
         );
         return response.data;
-    },
-
-    async getOnlyOfficeConfig(
-        type: OnlyOfficeDocumentType,
-        id: number,
-        mode: OnlyOfficeMode = 'edit',
-    ): Promise<OnlyOfficeEditorSession> {
-        const response = await axios.get(`/onlyoffice/config/${type}/${id}`, {
-            params: { mode },
-        });
-
-        return normalizeOnlyOfficeSession(response.data, type, id);
-    },
-
-    async heartbeatOnlyOfficeSession(
-        type: OnlyOfficeDocumentType,
-        id: number,
-        token: string,
-    ): Promise<OnlyOfficeHeartbeat> {
-        const response = await axios.post(
-            `/onlyoffice/session/${type}/${id}/heartbeat`,
-            { token },
-            { silent: true },
-        );
-
-        return response.data as OnlyOfficeHeartbeat;
-    },
-
-    async completarResolucionOnline(
-        expedienteId: number,
-        resolucionId: number,
-    ): Promise<void> {
-        await axios.post(
-            `/expedientes/${expedienteId}/resoluciones/${resolucionId}/completar-online`,
-        );
-    },
-
-    async retryMasterPdf(expedienteId: number): Promise<void> {
-        await axios.post(`/expedientes/${expedienteId}/pdf-master/reintentar`);
     },
 };

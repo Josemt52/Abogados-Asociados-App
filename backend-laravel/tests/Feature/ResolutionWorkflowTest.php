@@ -156,13 +156,7 @@ class ResolutionWorkflowTest extends TestCase
             'expediente_id' => $expediente->id,
             'numero' => 20,
             'estado' => Resolucion::ESTADO_PENDIENTE,
-            'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ]);
-        $storedResolution = Resolucion::findOrFail($resolutionId);
-        $storedTemplate = base64_decode($storedResolution->documento_data, true);
-        $this->assertIsString($storedTemplate);
-        $this->assertStringStartsWith("PK\x03\x04", $storedTemplate);
-        $this->assertNull($storedResolution->onlyoffice_saved_at);
     }
 
     public function test_next_template_uses_the_original_base_document_name(): void

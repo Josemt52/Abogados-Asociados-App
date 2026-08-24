@@ -24,10 +24,6 @@ class Resolucion extends Model
         'tipo_archivo',
         'documento_data',
         'completada_at',
-        'onlyoffice_version',
-        'onlyoffice_saved_at',
-        'onlyoffice_session_open',
-        'onlyoffice_session_expires_at',
     ];
 
     protected $hidden = [
@@ -40,10 +36,6 @@ class Resolucion extends Model
             'numero' => 'integer',
             'es_documento_base' => 'boolean',
             'completada_at' => 'datetime',
-            'onlyoffice_version' => 'integer',
-            'onlyoffice_saved_at' => 'datetime',
-            'onlyoffice_session_open' => 'boolean',
-            'onlyoffice_session_expires_at' => 'datetime',
         ];
     }
 

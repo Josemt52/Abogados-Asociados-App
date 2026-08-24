@@ -1,16 +1,6 @@
 import axios from 'axios';
 import { toast } from '@/composables/useToast';
 
-declare module 'axios' {
-    interface AxiosRequestConfig {
-        silent?: boolean;
-    }
-
-    interface InternalAxiosRequestConfig {
-        silent?: boolean;
-    }
-}
-
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '');
 
 const axiosInstance = axios.create({
@@ -34,10 +24,6 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.config?.silent === true) {
-            return Promise.reject(error);
-        }
-
         const status = error.response?.status;
         const data = error.response?.data;
         const isLoginRequest = error.config?.url?.includes('/auth/login');
