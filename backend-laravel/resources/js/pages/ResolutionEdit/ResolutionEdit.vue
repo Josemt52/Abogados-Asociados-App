@@ -5,6 +5,7 @@ import { ArrowLeft, CircleCheck, Save } from '@lucide/vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
     expedientesAPI,
+    type ResolutionEditorHeaderData,
     type ResolutionEditorPayload,
 } from '@/api';
 import RichTextEditor from '@/components/RichTextEditor.vue';
@@ -19,6 +20,35 @@ const emptyDocument = (): JSONContent => ({
 
 const cloneContent = (content: JSONContent): JSONContent =>
     JSON.parse(JSON.stringify(content)) as JSONContent;
+
+const emptyHeaderData = (): ResolutionEditorHeaderData => ({
+    numero: '',
+    materia: '',
+    juzgado: '',
+    especialista: '',
+    tercero: '',
+    demandado: '',
+    demandante: '',
+});
+
+const cloneHeaderData = (header: ResolutionEditorHeaderData): ResolutionEditorHeaderData => ({
+    ...header,
+});
+
+const headerFields: Array<{
+    key: keyof ResolutionEditorHeaderData;
+    label: string;
+    required?: boolean;
+    maxLength: number;
+}> = [
+    { key: 'numero', label: 'Expediente', required: true, maxLength: 100 },
+    { key: 'materia', label: 'Materia', maxLength: 500 },
+    { key: 'juzgado', label: 'Juzgado', maxLength: 255 },
+    { key: 'especialista', label: 'Especialista', maxLength: 255 },
+    { key: 'tercero', label: 'Tercero', maxLength: 255 },
+    { key: 'demandado', label: 'Demandado', maxLength: 255 },
+    { key: 'demandante', label: 'Demandante', maxLength: 255 },
+];
 
 const firstParam = (value: unknown): string => {
     if (Array.isArray(value)) {
@@ -36,6 +66,7 @@ const expedienteId = computed(() => Number(firstParam(route.params.expedienteId)
 const resolucionId = computed(() => Number(firstParam(route.params.resolucionId)));
 const payload = ref<ResolutionEditorPayload | null>(null);
 const content = ref<JSONContent>(emptyDocument());
+const headerData = ref<ResolutionEditorHeaderData>(emptyHeaderData());
 const savedSnapshot = ref('');
 const loading = ref(true);
 const saving = ref(false);
@@ -45,8 +76,10 @@ let loadRequestId = 0;
 let allowLeave = false;
 
 const isBusy = computed(() => loading.value || saving.value || finalizing.value);
+const currentSnapshot = (): string =>
+    JSON.stringify({ content: content.value, header_data: headerData.value });
 const isDirty = computed(
-    () => payload.value !== null && JSON.stringify(content.value) !== savedSnapshot.value,
+    () => payload.value !== null && currentSnapshot() !== savedSnapshot.value,
 );
 const documentName = computed(
     () => payload.value?.document_name || `Resolución ${payload.value?.numero ?? ''}`,
@@ -66,7 +99,8 @@ const applyPayload = (editorPayload: ResolutionEditorPayload): void => {
     const normalizedContent = cloneContent(editorPayload.content || emptyDocument());
     payload.value = editorPayload;
     content.value = normalizedContent;
-    savedSnapshot.value = JSON.stringify(normalizedContent);
+    headerData.value = cloneHeaderData(editorPayload.header_data);
+    savedSnapshot.value = currentSnapshot();
 };
 
 const loadEditor = async (): Promise<void> => {
@@ -76,6 +110,7 @@ const loadEditor = async (): Promise<void> => {
 
     payload.value = null;
     content.value = emptyDocument();
+    headerData.value = emptyHeaderData();
     savedSnapshot.value = '';
     loadError.value = null;
     allowLeave = false;
@@ -131,6 +166,11 @@ const saveDraft = async (showSuccess = true): Promise<boolean> => {
         return true;
     }
 
+    if (!headerData.value.numero.trim()) {
+        toast.error('El número de expediente es obligatorio.');
+        return false;
+    }
+
     saving.value = true;
 
     try {
@@ -138,6 +178,7 @@ const saveDraft = async (showSuccess = true): Promise<boolean> => {
             expedienteId.value,
             resolucionId.value,
             cloneContent(content.value),
+            cloneHeaderData(headerData.value),
             currentPayload.version,
         );
         applyPayload(response);
@@ -190,7 +231,7 @@ const handleFinalize = async (): Promise<void> => {
             resolucionId.value,
             currentPayload.version,
         );
-        savedSnapshot.value = JSON.stringify(content.value);
+        savedSnapshot.value = currentSnapshot();
         toast.success(`Resolución ${currentPayload.numero} incorporada al expediente.`);
         allowLeave = true;
         await router.push({
@@ -320,16 +361,33 @@ onBeforeUnmount(() => {
             >
                 <template #before-content>
                     <div class="mb-8 font-[Arial] text-[12pt] text-gray-950">
-                        <div class="ml-auto w-full max-w-lg space-y-1" aria-label="Cabecera inmutable del expediente">
+                        <div class="ml-auto w-full max-w-xl" aria-label="Cabecera editable del expediente">
+                            <p class="mb-3 text-sm font-semibold text-gray-700">
+                                Datos de la cabecera
+                            </p>
                             <div
-                                v-for="field in payload.header"
-                                :key="field.label"
-                                class="grid grid-cols-[minmax(7rem,auto)_1rem_minmax(0,1fr)] gap-x-1"
+                                v-for="field in headerFields"
+                                :key="field.key"
+                                class="mb-2 grid grid-cols-[minmax(7rem,auto)_1rem_minmax(0,1fr)] items-center gap-x-1"
                             >
-                                <span>{{ field.label }}</span>
+                                <label :for="`header-${field.key}`">
+                                    {{ field.label }}<span v-if="field.required" aria-hidden="true"> *</span>
+                                </label>
                                 <span aria-hidden="true">:</span>
-                                <span class="break-words">{{ field.value }}</span>
+                                <input
+                                    :id="`header-${field.key}`"
+                                    v-model="headerData[field.key]"
+                                    type="text"
+                                    :required="field.required"
+                                    :maxlength="field.maxLength"
+                                    :disabled="isBusy"
+                                    autocomplete="off"
+                                    class="min-h-9 w-full rounded border border-gray-300 bg-white px-2 py-1 font-[Arial] text-[12pt] uppercase text-gray-950 shadow-sm focus:border-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:bg-gray-100"
+                                />
                             </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                Los campos vacíos no aparecerán en el documento generado.
+                            </p>
                         </div>
 
                         <h2 class="mt-8 font-bold">RESOLUCIÓN N° {{ payload.numero }}</h2>

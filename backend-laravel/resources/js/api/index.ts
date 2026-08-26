@@ -15,6 +15,7 @@ export type {
     ResolucionEstado,
     ResolucionesSnapshot,
     ResolutionEditorCompletion,
+    ResolutionEditorHeaderData,
     ResolutionEditorHeaderField,
     ResolutionEditorPayload,
     UpdateExpedienteData,

@@ -195,30 +195,53 @@ class ResolutionRichTextService
     /** @return list<array{label: string, value: string}> */
     public function headerFields(Expediente $expediente): array
     {
-        $fields = [
-            'Expediente' => $expediente->numero,
-            'Materia' => $expediente->materia,
-            'Juzgado' => $expediente->juzgado,
-            'Especialista' => $expediente->especialista,
-            'Tercero' => $expediente->tercero,
-            'Demandado' => $expediente->demandado,
-            'Demandante' => $expediente->demandante,
+        $labels = [
+            'numero' => 'Expediente',
+            'materia' => 'Materia',
+            'juzgado' => 'Juzgado',
+            'especialista' => 'Especialista',
+            'tercero' => 'Tercero',
+            'demandado' => 'Demandado',
+            'demandante' => 'Demandante',
         ];
-
         $result = [];
 
-        foreach ($fields as $label => $value) {
-            $normalized = trim((string) $value);
+        foreach ($this->headerData($expediente) as $field => $value) {
+            $normalized = trim($value);
 
             if ($normalized !== '') {
                 $result[] = [
-                    'label' => $label,
+                    'label' => $labels[$field],
                     'value' => mb_strtoupper($normalized, 'UTF-8'),
                 ];
             }
         }
 
         return $result;
+    }
+
+    /**
+     * @return array{
+     *     numero: string,
+     *     materia: string,
+     *     juzgado: string,
+     *     especialista: string,
+     *     tercero: string,
+     *     demandado: string,
+     *     demandante: string
+     * }
+     */
+    public function headerData(Expediente $expediente): array
+    {
+        return [
+            'numero' => (string) ($expediente->numero ?? ''),
+            'materia' => (string) ($expediente->materia ?? ''),
+            'juzgado' => (string) ($expediente->juzgado ?? ''),
+            'especialista' => (string) ($expediente->especialista ?? ''),
+            'tercero' => (string) ($expediente->tercero ?? ''),
+            'demandado' => (string) ($expediente->demandado ?? ''),
+            'demandante' => (string) ($expediente->demandante ?? ''),
+        ];
     }
 
     /** @param array<string, mixed> $document */

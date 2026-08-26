@@ -12,6 +12,7 @@ use App\Services\ResolutionTemplateService;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ResolucionController extends Controller
 {
@@ -245,8 +246,22 @@ class ResolucionController extends Controller
         $validated = $request->validate([
             'content' => ['required', 'array'],
             'version' => ['required', 'integer', 'min:0'],
+            'header_data' => ['required', 'array:numero,materia,juzgado,especialista,tercero,demandado,demandante'],
+            'header_data.numero' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('expedientes', 'numero')->ignore((int) $id),
+            ],
+            'header_data.materia' => ['present', 'nullable', 'string', 'max:500'],
+            'header_data.juzgado' => ['present', 'nullable', 'string', 'max:255'],
+            'header_data.especialista' => ['present', 'nullable', 'string', 'max:255'],
+            'header_data.tercero' => ['present', 'nullable', 'string', 'max:255'],
+            'header_data.demandado' => ['present', 'nullable', 'string', 'max:255'],
+            'header_data.demandante' => ['present', 'nullable', 'string', 'max:255'],
         ]);
         $content = $richText->normalize($validated['content']);
+        $headerData = $this->normalizeHeaderData($validated['header_data']);
         $expectedVersion = (int) $validated['version'];
         $expediente = Expediente::findOrFail($id);
         $resolution = $expediente->resoluciones()->findOrFail($resolucionId);
@@ -258,22 +273,15 @@ class ResolucionController extends Controller
             ], 409));
         }
 
-        $originalDocumentName = $this->originalDocumentName($expediente);
-        $fileName = $templates->downloadName(
-            $expediente,
-            $resolution->numero,
-            $originalDocumentName
-        );
-        $binary = $richText->generateDocx($expediente, $resolution, $content);
-
-        $resolution = DB::transaction(function () use (
+        [$expediente, $resolution] = DB::transaction(function () use (
             $id,
             $resolucionId,
             $expectedVersion,
             $content,
-            $fileName,
-            $binary
-        ): Resolucion {
+            $headerData,
+            $richText,
+            $templates
+        ): array {
             $lockedExpediente = Expediente::lockForUpdate()->findOrFail($id);
             $lockedResolution = Resolucion::where('expediente_id', $id)
                 ->lockForUpdate()
@@ -286,6 +294,18 @@ class ResolucionController extends Controller
                 ], 409));
             }
 
+            $lockedExpediente->fill($headerData)->save();
+            $fileName = $templates->downloadName(
+                $lockedExpediente,
+                $lockedResolution->numero,
+                $this->originalDocumentName($lockedExpediente)
+            );
+            $binary = $richText->generateDocx(
+                $lockedExpediente,
+                $lockedResolution,
+                $content
+            );
+
             $lockedResolution->fill([
                 'contenido_editor' => $content,
                 'esquema_editor' => ResolutionRichTextService::SCHEMA_VERSION,
@@ -296,10 +316,10 @@ class ResolucionController extends Controller
                 'documento_data' => base64_encode($binary),
             ])->save();
 
-            return $lockedResolution->fresh();
+            return [$lockedExpediente->fresh(), $lockedResolution->fresh()];
         });
 
-        return response()->json($this->editorPayload($expediente->fresh(), $resolution, $richText));
+        return response()->json($this->editorPayload($expediente, $resolution, $richText));
     }
 
     public function finalizarEditor(
@@ -460,10 +480,35 @@ class ResolucionController extends Controller
             'estado' => $resolution->estado,
             'document_name' => $resolution->nombre_archivo,
             'header' => $richText->headerFields($expediente),
+            'header_data' => $richText->headerData($expediente),
             'content' => $resolution->contenido_editor ?? $richText->emptyDocument(),
             'version' => (int) $resolution->version_editor,
             'saved_at' => $resolution->contenido_editado_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $headerData
+     * @return array<string, string|null>
+     */
+    private function normalizeHeaderData(array $headerData): array
+    {
+        $result = [];
+
+        foreach ([
+            'numero',
+            'materia',
+            'juzgado',
+            'especialista',
+            'tercero',
+            'demandado',
+            'demandante',
+        ] as $field) {
+            $value = trim((string) ($headerData[$field] ?? ''));
+            $result[$field] = $field === 'numero' || $value !== '' ? $value : null;
+        }
+
+        return $result;
     }
 
     private function assertPendingNext(Expediente $expediente, Resolucion $resolution): void

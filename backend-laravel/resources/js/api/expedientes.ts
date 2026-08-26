@@ -49,6 +49,16 @@ export interface ResolutionEditorHeaderField {
     value: string;
 }
 
+export interface ResolutionEditorHeaderData {
+    numero: string;
+    materia: string;
+    juzgado: string;
+    especialista: string;
+    tercero: string;
+    demandado: string;
+    demandante: string;
+}
+
 export interface ResolutionEditorPayload {
     expediente_id: number;
     resolucion_id: number;
@@ -56,6 +66,7 @@ export interface ResolutionEditorPayload {
     estado: ResolucionEstado;
     document_name: string | null;
     header: ResolutionEditorHeaderField[];
+    header_data: ResolutionEditorHeaderData;
     content: JSONContent;
     version: number;
     saved_at: string | null;
@@ -113,6 +124,7 @@ const parseResolutionEditorPayload = (value: unknown): ResolutionEditorPayload =
     }
 
     const header = value.header;
+    const headerData = value.header_data;
     const content = value.content;
     const validHeader =
         Array.isArray(header) &&
@@ -123,6 +135,17 @@ const parseResolutionEditorPayload = (value: unknown): ResolutionEditorPayload =
                 typeof field.value === 'string',
         );
     const validContent = isRecord(content) && content.type === 'doc';
+    const validHeaderData =
+        isRecord(headerData) &&
+        [
+            'numero',
+            'materia',
+            'juzgado',
+            'especialista',
+            'tercero',
+            'demandado',
+            'demandante',
+        ].every((field) => typeof headerData[field] === 'string');
 
     if (
         !isPositiveInteger(value.expediente_id) ||
@@ -131,6 +154,7 @@ const parseResolutionEditorPayload = (value: unknown): ResolutionEditorPayload =
         !isResolutionState(value.estado) ||
         !isNullableString(value.document_name) ||
         !validHeader ||
+        !validHeaderData ||
         !validContent ||
         typeof value.version !== 'number' ||
         !Number.isInteger(value.version) ||
@@ -147,6 +171,7 @@ const parseResolutionEditorPayload = (value: unknown): ResolutionEditorPayload =
         estado: value.estado,
         document_name: value.document_name,
         header: header as ResolutionEditorHeaderField[],
+        header_data: headerData as unknown as ResolutionEditorHeaderData,
         content: content as JSONContent,
         version: value.version,
         saved_at: value.saved_at,
@@ -294,11 +319,12 @@ export const expedientesAPI = {
         expedienteId: number,
         resolucionId: number,
         content: JSONContent,
+        headerData: ResolutionEditorHeaderData,
         version: number,
     ): Promise<ResolutionEditorPayload> {
         const response = await axios.put(
             `/expedientes/${expedienteId}/resoluciones/${resolucionId}/editor`,
-            { content, version },
+            { content, header_data: headerData, version },
         );
 
         return parseResolutionEditorPayload(response.data);

@@ -340,6 +340,7 @@ class ResolutionWorkflowTest extends TestCase
         $expediente = Expediente::create([
             'numero' => 'EXP-EDITOR-001',
             'materia' => 'Proceso civil',
+            'tercero' => 'Tercero que será retirado',
             'archivo' => false,
             'ultima_resolucion' => 0,
         ]);
@@ -355,6 +356,15 @@ class ResolutionWorkflowTest extends TestCase
                 ]],
             ]],
         ];
+        $headerData = $this->editorHeaderData($expediente, [
+            'numero' => 'EXP-EDITOR-ACTUALIZADO',
+            'materia' => 'Nueva materia constitucional',
+            'juzgado' => 'Segundo juzgado civil',
+            'especialista' => 'Especialista actualizado',
+            'tercero' => '',
+            'demandado' => 'Nueva parte demandada',
+            'demandante' => 'Nueva parte demandante',
+        ]);
 
         $started = $this->postJson(
             '/api/expedientes/'.$expediente->id.'/resoluciones/siguiente/editor'
@@ -363,25 +373,33 @@ class ResolutionWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('numero', 1)
             ->assertJsonPath('version', 0)
+            ->assertJsonPath('header_data.numero', 'EXP-EDITOR-001')
             ->assertJsonPath('content.type', 'doc');
         $resolutionId = $started->json('resolucion_id');
 
         $saved = $this->putJson(
             '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
-            ['content' => $content, 'version' => 0]
+            ['content' => $content, 'header_data' => $headerData, 'version' => 0]
         );
         $saved
             ->assertOk()
             ->assertJsonPath('version', 1)
+            ->assertJsonPath('header_data.numero', 'EXP-EDITOR-ACTUALIZADO')
+            ->assertJsonPath('header_data.materia', 'Nueva materia constitucional')
+            ->assertJsonPath('header_data.tercero', '')
             ->assertJsonPath('content.content.0.content.0.text', 'Contenido redactado dentro de la aplicación.');
         $this->assertDatabaseHas('expedientes', [
             'id' => $expediente->id,
+            'numero' => 'EXP-EDITOR-ACTUALIZADO',
+            'materia' => 'Nueva materia constitucional',
+            'juzgado' => 'Segundo juzgado civil',
+            'tercero' => null,
             'ultima_resolucion' => 0,
         ]);
 
         $this->putJson(
             '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
-            ['content' => $content, 'version' => 0]
+            ['content' => $content, 'header_data' => $headerData, 'version' => 0]
         )->assertConflict();
 
         $convertedPdf = Pdf::loadHTML('<p>Resolución creada en el editor</p>')->output();
@@ -390,6 +408,8 @@ class ResolutionWorkflowTest extends TestCase
                 ->once()
                 ->withArgs(function (string $document, string $format): bool {
                     return $format === 'docx'
+                        && str_contains($this->documentXml($document), 'EXP-EDITOR-ACTUALIZADO')
+                        && str_contains($this->documentXml($document), 'NUEVA MATERIA CONSTITUCIONAL')
                         && str_contains($this->documentXml($document), 'Contenido redactado dentro de la aplicación.');
                 })
                 ->andReturn($convertedPdf);
@@ -434,10 +454,11 @@ class ResolutionWorkflowTest extends TestCase
                 'content' => [['type' => 'text', 'text' => 'Borrador que no debe perderse.']],
             ]],
         ];
+        $headerData = $this->editorHeaderData($expediente);
 
         $this->putJson(
             '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
-            ['content' => $content, 'version' => 0]
+            ['content' => $content, 'header_data' => $headerData, 'version' => 0]
         )->assertOk()->assertJsonPath('version', 1);
         $this->mock(LibreOfficeService::class, function (MockInterface $mock): void {
             $mock->shouldReceive('convertToPdf')
@@ -456,6 +477,56 @@ class ResolutionWorkflowTest extends TestCase
         $this->assertSame($content, $resolution->contenido_editor);
         $this->assertSame(3, $expediente->fresh()->ultima_resolucion);
         $this->assertDatabaseMissing('archivos', ['expediente_id' => $expediente->id]);
+    }
+
+    public function test_lightweight_editor_rejects_a_duplicate_expediente_number_without_changing_the_draft(): void
+    {
+        $this->authenticate();
+        Expediente::create([
+            'numero' => 'EXP-NUMERO-OCUPADO',
+            'archivo' => false,
+            'ultima_resolucion' => 0,
+        ]);
+        $expediente = Expediente::create([
+            'numero' => 'EXP-NUMERO-ORIGINAL',
+            'materia' => 'Materia original',
+            'archivo' => false,
+            'ultima_resolucion' => 0,
+        ]);
+        $started = $this->postJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/siguiente/editor'
+        )->assertOk();
+        $resolutionId = $started->json('resolucion_id');
+        $content = [
+            'type' => 'doc',
+            'content' => [[
+                'type' => 'paragraph',
+                'attrs' => ['textAlign' => 'left'],
+                'content' => [['type' => 'text', 'text' => 'Contenido sin guardar.']],
+            ]],
+        ];
+
+        $this->putJson(
+            '/api/expedientes/'.$expediente->id.'/resoluciones/'.$resolutionId.'/editor',
+            [
+                'content' => $content,
+                'header_data' => $this->editorHeaderData($expediente, [
+                    'numero' => 'EXP-NUMERO-OCUPADO',
+                    'materia' => 'Materia que no debe persistir',
+                ]),
+                'version' => 0,
+            ]
+        )->assertUnprocessable()->assertJsonValidationErrors('header_data.numero');
+
+        $this->assertDatabaseHas('expedientes', [
+            'id' => $expediente->id,
+            'numero' => 'EXP-NUMERO-ORIGINAL',
+            'materia' => 'Materia original',
+        ]);
+        $this->assertDatabaseHas('resoluciones', [
+            'id' => $resolutionId,
+            'version_editor' => 0,
+        ]);
     }
 
     public function test_completing_resolution_rejects_a_docx_with_a_false_extension(): void
@@ -501,6 +572,23 @@ class ResolutionWorkflowTest extends TestCase
         ]);
 
         $this->withToken(JWTAuth::fromUser($user));
+    }
+
+    /**
+     * @param  array<string, string>  $overrides
+     * @return array<string, string>
+     */
+    private function editorHeaderData(Expediente $expediente, array $overrides = []): array
+    {
+        return array_merge([
+            'numero' => (string) $expediente->numero,
+            'materia' => (string) ($expediente->materia ?? ''),
+            'juzgado' => (string) ($expediente->juzgado ?? ''),
+            'especialista' => (string) ($expediente->especialista ?? ''),
+            'tercero' => (string) ($expediente->tercero ?? ''),
+            'demandado' => (string) ($expediente->demandado ?? ''),
+            'demandante' => (string) ($expediente->demandante ?? ''),
+        ], $overrides);
     }
 
     /** @param array<int, string> $paragraphs */
