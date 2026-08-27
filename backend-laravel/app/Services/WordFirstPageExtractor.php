@@ -20,6 +20,7 @@ class WordFirstPageExtractor
     public function __construct(
         private readonly TesseractOcrService $ocr,
         private readonly LibreOfficeService $libreOffice,
+        private readonly LegacyDocTextNormalizer $legacyDocTextNormalizer,
     ) {}
 
     /**
@@ -160,9 +161,26 @@ class WordFirstPageExtractor
     private function extractDoc(string $binary): array
     {
         $this->assertValid($binary, 'doc');
+        $libreOfficeAvailable = $this->libreOffice->isAvailable();
+        $lastException = null;
+
+        // LibreOffice interpreta el formato binario de Word con mayor
+        // fidelidad y, al convertirlo a DOCX, también habilita el OCR de las
+        // imágenes de una primera página escaneada.
+        if ($libreOfficeAvailable) {
+            try {
+                $converted = $this->libreOffice->convertDocToDocx($binary);
+                $result = $this->extractDocx($converted);
+                $result['method'] = 'doc_converted_'.$result['method'];
+
+                return $result;
+            } catch (Throwable $exception) {
+                $lastException = $exception;
+            }
+        }
 
         try {
-            $text = $this->withTemporaryFile($binary, 'doc', function (string $path): string {
+            $rawText = $this->withTemporaryFile($binary, 'doc', function (string $path): string {
                 $reader = IOFactory::createReader('MsDoc');
                 $reader->setImageLoading(false);
                 $document = $reader->load($path);
@@ -179,8 +197,15 @@ class WordFirstPageExtractor
 
                 return trim(implode("\n", array_filter($parts)));
             });
+            $text = $this->legacyDocTextNormalizer->normalize($rawText);
+            $textIsReadable = mb_strlen($text) >= 30
+                && $this->legacyDocTextNormalizer->isReadable($text);
 
-            if (mb_strlen($text) >= 30 || ! $this->libreOffice->isAvailable()) {
+            if ($textIsReadable) {
+                if (! $this->legacyDocTextNormalizer->isReadable($rawText)) {
+                    return $this->recoveredDocResult($text);
+                }
+
                 return [
                     'text' => $this->limitText($text),
                     'method' => 'doc_text',
@@ -189,20 +214,27 @@ class WordFirstPageExtractor
                 ];
             }
         } catch (Throwable $exception) {
-            if (! $this->libreOffice->isAvailable()) {
-                throw new InvalidArgumentException('No se pudo leer el archivo DOC legado.', 0, $exception);
-            }
+            $lastException = $exception;
         }
 
-        try {
-            $converted = $this->libreOffice->convertDocToDocx($binary);
-            $result = $this->extractDocx($converted);
-            $result['method'] = 'doc_converted_'.$result['method'];
+        throw new InvalidArgumentException(
+            $libreOfficeAvailable
+                ? 'No se pudo extraer el contenido del archivo DOC legado.'
+                : 'No se pudo leer el archivo DOC legado y LibreOffice no está disponible.',
+            0,
+            $lastException
+        );
+    }
 
-            return $result;
-        } catch (Throwable $exception) {
-            throw new InvalidArgumentException('No se pudo extraer el contenido del archivo DOC legado.', 0, $exception);
-        }
+    /** @return array{text: string, method: string, ocr_confidence: ?float, page_boundary: string} */
+    private function recoveredDocResult(string $text): array
+    {
+        return [
+            'text' => $this->limitText($text),
+            'method' => 'doc_text_recovered',
+            'ocr_confidence' => null,
+            'page_boundary' => 'heuristic',
+        ];
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\LegacyDocTextNormalizer;
 use App\Services\LibreOfficeService;
 use App\Services\TesseractOcrService;
 use App\Services\WordFirstPageExtractor;
@@ -66,7 +67,7 @@ class WordFirstPageExtractorTest extends TestCase
         $libreOffice = Mockery::mock(LibreOfficeService::class);
         $libreOffice->shouldReceive('isAvailable')->andReturnFalse();
 
-        return new WordFirstPageExtractor($ocr, $libreOffice);
+        return new WordFirstPageExtractor($ocr, $libreOffice, new LegacyDocTextNormalizer);
     }
 
     private function wordBinary(PhpWord $document): string
