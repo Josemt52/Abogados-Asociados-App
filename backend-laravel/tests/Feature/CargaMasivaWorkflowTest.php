@@ -75,6 +75,38 @@ class CargaMasivaWorkflowTest extends TestCase
         $this->withToken($otherToken)->getJson("/api/cargas-masivas/{$batch->uuid}")->assertNotFound();
     }
 
+    public function test_case_detail_loads_primary_file_metadata_without_ambiguous_columns(): void
+    {
+        [, $token] = $this->userWithRole('USUARIO', 'operador');
+        $expediente = Expediente::create([
+            'numero' => '00125-2026-0-1801-JR-CI-01',
+            'archivo' => true,
+            'nombre_archivo' => 'principal.docx',
+        ]);
+        $primary = Archivo::create([
+            'expediente_id' => $expediente->id,
+            'es_principal' => true,
+            'origen' => 'manual',
+            'nombre_archivo' => 'principal.docx',
+            'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'documento_data' => base64_encode('principal'),
+        ]);
+        Archivo::create([
+            'expediente_id' => $expediente->id,
+            'es_principal' => false,
+            'origen' => 'carga_masiva',
+            'nombre_archivo' => 'anexo.docx',
+            'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'documento_data' => base64_encode('anexo'),
+        ]);
+
+        $this->withToken($token)
+            ->getJson("/api/expedientes/{$expediente->id}")
+            ->assertOk()
+            ->assertJsonPath('archivo_data.id', $primary->id)
+            ->assertJsonPath('archivo_data.nombre_archivo', 'principal.docx');
+    }
+
     public function test_retrying_the_same_upload_is_idempotent(): void
     {
         Storage::fake('local');

@@ -49,7 +49,14 @@ class ExpedienteController extends Controller
     public function show($id)
     {
         // Cargar solo metadatos del archivo, no el contenido binario
-        $expediente = Expediente::with(['archivoData:id,expediente_id,nombre_archivo,tipo_archivo'])
+        $expediente = Expediente::with([
+            'archivoData' => fn ($query) => $query->select([
+                'archivos.id',
+                'archivos.expediente_id',
+                'archivos.nombre_archivo',
+                'archivos.tipo_archivo',
+            ]),
+        ])
             ->findOrFail($id);
 
         return response()->json($expediente);
