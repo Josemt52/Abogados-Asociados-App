@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\AdminCargaMasivaController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CargaMasivaController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\DocumentoController;
 use App\Http\Controllers\Api\EstadisticasController;
@@ -25,6 +27,15 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
     Route::get('/auth/me', [AuthController::class, 'me']);
+
+    // Carga masiva de expedientes. El progreso para usuarios no expone
+    // motivos, confianza ni errores de revisión.
+    Route::post('/cargas-masivas', [CargaMasivaController::class, 'store'])
+        ->middleware('throttle:10,1');
+    Route::post('/cargas-masivas/{carga}/items/{item}/archivo', [CargaMasivaController::class, 'upload'])
+        ->middleware('throttle:120,1');
+    Route::get('/cargas-masivas/{carga}', [CargaMasivaController::class, 'show'])
+        ->middleware('throttle:120,1');
 
     // Expedientes endpoints
     Route::apiResource('expedientes', ExpedienteController::class);
@@ -53,6 +64,13 @@ Route::middleware('auth:api')->group(function () {
 
     // Admin only routes
     Route::middleware('role:ADMIN')->group(function () {
+        Route::get('/admin/cargas-masivas/items', [AdminCargaMasivaController::class, 'index']);
+        Route::get('/admin/cargas-masivas/items/{item}', [AdminCargaMasivaController::class, 'show']);
+        Route::get('/admin/cargas-masivas/items/{item}/download', [AdminCargaMasivaController::class, 'download']);
+        Route::post('/admin/cargas-masivas/items/{item}/aprobar', [AdminCargaMasivaController::class, 'approve']);
+        Route::post('/admin/cargas-masivas/items/{item}/reprocesar', [AdminCargaMasivaController::class, 'retry']);
+        Route::get('/admin/cargas-masivas/configuracion', [AdminCargaMasivaController::class, 'configuration']);
+        Route::put('/admin/cargas-masivas/configuracion', [AdminCargaMasivaController::class, 'updateConfiguration']);
         Route::apiResource('usuarios', UsuarioController::class);
         Route::get('/contacto', [ContactController::class, 'index']);
         Route::get('/contacto/{id}', [ContactController::class, 'show']);

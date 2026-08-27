@@ -41,7 +41,15 @@ php artisan serve
 npm run dev
 ```
 
+Para procesar cargas masivas en segundo plano, ejecuta también:
+
+```powershell
+php artisan queue:work --tries=2 --timeout=180
+```
+
 Abre `http://localhost:8000`. Vite solo sirve los recursos durante el desarrollo; las páginas y las peticiones API salen desde Laravel.
+
+La carga para usuarios está en `/carga-masiva`. La revisión interna está separada en `/paneladmin` y exige una cuenta con rol `ADMIN`; no se enlaza desde la interfaz normal.
 
 ## Validación
 
@@ -60,6 +68,8 @@ php artisan optimize
 ```
 
 Configura el servidor web con `public/` como raíz. El fallback de `routes/web.php` permite abrir directamente rutas de Vue como `/expedientes/15`; las rutas `/api/*` siguen siendo manejadas exclusivamente por Laravel.
+
+Mantén un proceso `php artisan queue:work --tries=2 --timeout=180` activo en producción. Los DOCX y la mayoría de DOC con texto se leen sin software adicional; LibreOffice queda como respaldo opcional para DOC legados difíciles. Tesseract es opcional para documentos escaneados; cuando no está disponible, el archivo queda protegido en el panel administrativo de pendientes.
 
 ## Estructura principal
 

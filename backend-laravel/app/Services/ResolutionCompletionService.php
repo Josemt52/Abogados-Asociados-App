@@ -93,7 +93,11 @@ class ResolutionCompletionService
             $lockedResolution = Resolucion::where('expediente_id', $expedienteId)
                 ->lockForUpdate()
                 ->findOrFail($resolutionId);
-            $lockedArchivo = Archivo::where('expediente_id', $expedienteId)->lockForUpdate()->first();
+            $lockedArchivo = Archivo::where('expediente_id', $expedienteId)
+                ->where('es_principal', true)
+                ->oldest('id')
+                ->lockForUpdate()
+                ->first();
             $currentFingerprint = $lockedArchivo === null
                 ? null
                 : hash('sha256', (string) $lockedArchivo->documento_data);

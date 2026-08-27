@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, unref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { Search } from '@lucide/vue';
+import { Search, Upload } from '@lucide/vue';
 import { useAuth } from '@/composables/useAuth';
 
 const auth = useAuth();
@@ -13,6 +13,12 @@ const menuItems = [
     description: 'Busca, consulta y administra los expedientes registrados',
     icon: Search,
     href: '/expedientes',
+  },
+  {
+    title: 'Carga masiva',
+    description: 'Sube hasta 50 documentos Word y registra sus expedientes automáticamente',
+    icon: Upload,
+    href: '/carga-masiva',
   },
 ];
 </script>

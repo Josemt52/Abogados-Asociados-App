@@ -592,16 +592,16 @@ watch(
                             <dd class="mt-1 text-sm text-gray-900">{{ expediente.especialista }}</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Tercero</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ expediente.tercero || 'N/A' }}</dd>
+                            <dt class="text-sm font-medium text-gray-500">Terceros</dt>
+                            <dd class="mt-1 whitespace-pre-line text-sm text-gray-900">{{ expediente.tercero || 'N/A' }}</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Demandado</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ expediente.demandado || 'N/A' }}</dd>
+                            <dt class="text-sm font-medium text-gray-500">Demandados</dt>
+                            <dd class="mt-1 whitespace-pre-line text-sm text-gray-900">{{ expediente.demandado || 'N/A' }}</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Demandante</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ expediente.demandante || 'N/A' }}</dd>
+                            <dt class="text-sm font-medium text-gray-500">Demandantes</dt>
+                            <dd class="mt-1 whitespace-pre-line text-sm text-gray-900">{{ expediente.demandante || 'N/A' }}</dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Archivo</dt>

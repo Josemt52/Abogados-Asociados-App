@@ -1,10 +1,25 @@
 export { authAPI } from './auth';
+export { adminCargasMasivasAPI } from './adminCargasMasivas';
+export { cargasMasivasAPI } from './cargasMasivas';
 export { contactoAPI } from './contacto';
 export { estadisticasAPI } from './estadisticas';
 export { expedientesAPI } from './expedientes';
 export { usuariosAPI } from './usuarios';
 
 export type { LoginCredentials, LoginResponse } from './auth';
+export type {
+    AdminImportItem,
+    AdminImportList,
+    AdminImportStatus,
+    ApproveImportData,
+    ExtractedCaseData,
+    ImportConfiguration,
+} from './adminCargasMasivas';
+export type {
+    CargaMasivaCreated,
+    CargaMasivaProgress,
+    CargaMasivaUploadSlot,
+} from './cargasMasivas';
 export type { Contacto, CreateContactoData } from './contacto';
 export type { Estadisticas, EstadisticasPorEstado, EstadisticasPorTipo } from './estadisticas';
 export type {

@@ -51,6 +51,23 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/ExpedienteDetail/ExpedienteDetail.vue'),
         props: true,
       },
+      {
+        path: 'carga-masiva',
+        name: 'carga-masiva',
+        component: () => import('@/pages/CargaMasiva/CargaMasiva.vue'),
+      },
+    ],
+  },
+  {
+    path: '/paneladmin',
+    component: () => import('@/components/Layout/AdminLayout.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true },
+    children: [
+      {
+        path: '',
+        name: 'panel-admin',
+        component: () => import('@/pages/PanelAdmin/PanelAdmin.vue'),
+      },
     ],
   },
   {

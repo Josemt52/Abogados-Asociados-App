@@ -185,37 +185,40 @@ const handleDocumentToggle = (): void => {
             </div>
 
             <div>
-                <label for="tercero" class="mb-1 block text-sm font-medium text-gray-700">Tercero</label>
-                <input
+                <label for="tercero" class="mb-1 block text-sm font-medium text-gray-700">Terceros</label>
+                <textarea
                     id="tercero"
                     v-model="formData.tercero"
-                    type="text"
                     name="tercero"
-                    placeholder="Tercero involucrado..."
+                    rows="3"
+                    maxlength="5000"
+                    placeholder="Una persona por línea..."
                     class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
             </div>
 
             <div>
-                <label for="demandado" class="mb-1 block text-sm font-medium text-gray-700">Demandado</label>
-                <input
+                <label for="demandado" class="mb-1 block text-sm font-medium text-gray-700">Demandados</label>
+                <textarea
                     id="demandado"
                     v-model="formData.demandado"
-                    type="text"
                     name="demandado"
-                    placeholder="Nombre del demandado..."
+                    rows="3"
+                    maxlength="5000"
+                    placeholder="Una persona por línea..."
                     class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
             </div>
 
             <div>
-                <label for="demandante" class="mb-1 block text-sm font-medium text-gray-700">Demandante</label>
-                <input
+                <label for="demandante" class="mb-1 block text-sm font-medium text-gray-700">Demandantes</label>
+                <textarea
                     id="demandante"
                     v-model="formData.demandante"
-                    type="text"
                     name="demandante"
-                    placeholder="Nombre del demandante..."
+                    rows="3"
+                    maxlength="5000"
+                    placeholder="Una persona por línea..."
                     class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
             </div>

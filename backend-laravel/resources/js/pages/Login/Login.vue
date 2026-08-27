@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { Lock, Scale, User } from '@lucide/vue';
 import { isAxiosError } from 'axios';
 import { authAPI } from '@/api';
@@ -8,6 +8,7 @@ import { useAuth } from '@/composables/useAuth';
 import { useToast } from '@/composables/useToast';
 
 const router = useRouter();
+const route = useRoute();
 const { login } = useAuth();
 const toast = useToast();
 const appName = import.meta.env.VITE_APP_NAME || 'Abogados Asociados';
@@ -34,7 +35,11 @@ const handleSubmit = async () => {
 
     login(user, token);
     toast.success('Bienvenido al sistema');
-    await router.replace('/main');
+    const requestedRedirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/main';
+    const safeRedirect = requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//')
+      ? requestedRedirect
+      : '/main';
+    await router.replace(safeRedirect);
   } catch (error) {
     // El interceptor evita mostrar "sesión expirada" durante un login fallido.
     if (isAxiosError(error) && error.response?.status === 401) {

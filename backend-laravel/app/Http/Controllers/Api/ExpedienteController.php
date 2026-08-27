@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Archivo;
 use App\Models\Expediente;
+use App\Services\ExpedienteNumberLock;
 use App\Services\ResolutionNumberDetector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class ExpedienteController extends Controller
 {
@@ -56,16 +58,16 @@ class ExpedienteController extends Controller
     /**
      * Store a newly created expediente
      */
-    public function store(Request $request)
+    public function store(Request $request, ExpedienteNumberLock $numberLock)
     {
         $validated = $request->validate([
             'numero' => 'required|string|max:100|unique:expedientes,numero',
             'materia' => 'nullable|string|max:500',
             'juzgado' => 'nullable|string|max:255',
             'especialista' => 'nullable|string|max:255',
-            'tercero' => 'nullable|string|max:255',
-            'demandado' => 'nullable|string|max:255',
-            'demandante' => 'nullable|string|max:255',
+            'tercero' => 'nullable|string|max:5000',
+            'demandado' => 'nullable|string|max:5000',
+            'demandante' => 'nullable|string|max:5000',
             'estado' => 'nullable|string|max:1000',
         ]);
 
@@ -75,7 +77,12 @@ class ExpedienteController extends Controller
         $validated['ultima_resolucion'] = 0;
         $validated['resolucion_detectada'] = null;
 
-        $expediente = Expediente::create($validated);
+        $expediente = DB::transaction(function () use ($validated, $numberLock): Expediente {
+            $numberLock->acquire($validated['numero']);
+            $this->assertNormalizedNumberIsUnique($validated['numero']);
+
+            return Expediente::create($validated);
+        });
 
         Log::info('Expediente creado', ['numero' => $expediente->numero, 'id' => $expediente->id]);
 
@@ -85,32 +92,44 @@ class ExpedienteController extends Controller
     /**
      * Update the specified expediente
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, $id, ExpedienteNumberLock $numberLock)
     {
-        $expediente = Expediente::findOrFail($id);
+        Expediente::findOrFail($id);
 
         $validated = $request->validate([
             'numero' => 'sometimes|string|max:100|unique:expedientes,numero,'.$id,
             'materia' => 'nullable|string|max:500',
             'juzgado' => 'nullable|string|max:255',
             'especialista' => 'nullable|string|max:255',
-            'tercero' => 'nullable|string|max:255',
-            'demandado' => 'nullable|string|max:255',
-            'demandante' => 'nullable|string|max:255',
+            'tercero' => 'nullable|string|max:5000',
+            'demandado' => 'nullable|string|max:5000',
+            'demandante' => 'nullable|string|max:5000',
             'estado' => 'nullable|string|max:1000',
         ]);
 
-        // Solo actualizar los campos presentes en la solicitud
-        // NO actualizar 'archivo' ni 'nombre_archivo' desde el formulario
-        // Estos campos se actualizan solo al subir archivo
-        // Excluir valores vacíos para evitar sobrescritura accidental
-        foreach ($validated as $key => $value) {
-            if ($value !== null && $value !== '') {
-                $expediente->$key = $value;
+        $expediente = DB::transaction(function () use ($validated, $id, $numberLock): Expediente {
+            if (isset($validated['numero'])) {
+                $numberLock->acquire($validated['numero']);
             }
-        }
 
-        $expediente->save();
+            $locked = Expediente::query()->lockForUpdate()->findOrFail($id);
+
+            if (isset($validated['numero'])) {
+                $this->assertNormalizedNumberIsUnique($validated['numero'], (int) $id);
+            }
+
+            // Solo actualizar los campos presentes en la solicitud.
+            // Los campos de archivo se actualizan únicamente desde su propio flujo.
+            foreach ($validated as $key => $value) {
+                if ($value !== null && $value !== '') {
+                    $locked->{$key} = $value;
+                }
+            }
+
+            $locked->save();
+
+            return $locked;
+        });
 
         return response()->json($expediente);
     }
@@ -195,11 +214,16 @@ class ExpedienteController extends Controller
             // Store the original uploaded file as-is (do not force conversion on upload)
             // We will generate PDF previews on demand via the DocumentoController when required.
             // Buscar archivo existente o crear nuevo
-            $archivo = Archivo::firstOrNew(['expediente_id' => $id]);
+            $archivo = Archivo::firstOrNew([
+                'expediente_id' => $id,
+                'es_principal' => true,
+            ]);
             $archivo->nombre_archivo = $fileName;
             $archivo->tipo_archivo = $mimeType;
             $archivo->documento_data = $documentoData;
             $archivo->expediente_id = $id;
+            $archivo->es_principal = true;
+            $archivo->origen = 'manual';
             $archivo->save();
 
             // ACTUALIZAR EL ESTADO DEL EXPEDIENTE: marcar que tiene archivo
@@ -232,9 +256,8 @@ class ExpedienteController extends Controller
      */
     public function downloadFile($id)
     {
-        Expediente::findOrFail($id);
-
-        $archivo = Archivo::where('expediente_id', $id)->first();
+        $expediente = Expediente::with('archivoData')->findOrFail($id);
+        $archivo = $expediente->archivoData;
         if (! $archivo) {
             return response()->json(['error' => 'Archivo no encontrado'], 404);
         }
@@ -275,5 +298,21 @@ class ExpedienteController extends Controller
         $name = preg_replace('/[\x00-\x1F\x7F]+/u', '_', $name) ?? '';
 
         return trim($name) !== '' ? $name : $fallback;
+    }
+
+    private function assertNormalizedNumberIsUnique(string $number, ?int $ignoreId = null): void
+    {
+        $query = Expediente::query()
+            ->where('numero_normalizado', Expediente::normalizarNumero($number));
+
+        if ($ignoreId !== null) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'numero' => 'Ya existe un expediente con este número.',
+            ]);
+        }
     }
 }

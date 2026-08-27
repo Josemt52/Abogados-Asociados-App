@@ -8,14 +8,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Archivo extends Model
 {
     protected $table = 'archivos';
-    
+
     public $timestamps = true;
-    
+
     protected $fillable = [
         'nombre_archivo',
         'tipo_archivo',
         'documento_data',
         'expediente_id',
+        'es_principal',
+        'origen',
+    ];
+
+    protected $casts = [
+        'es_principal' => 'boolean',
     ];
 
     protected $hidden = [
