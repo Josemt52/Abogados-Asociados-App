@@ -10,6 +10,8 @@ Aplicación unificada para la gestión de expedientes jurídicos. Laravel expone
 - npm 8 o superior
 - MySQL
 - Extensión PHP `pdo_sqlite` para las pruebas de integración
+- Poppler (`pdftotext` y `pdftoppm`) para cargas masivas en PDF
+- Tesseract con español para PDFs o documentos Word escaneados
 
 ## Instalación local
 
@@ -44,7 +46,7 @@ npm run dev
 Para procesar cargas masivas en segundo plano, ejecuta también:
 
 ```powershell
-php artisan queue:work --tries=2 --timeout=180
+php artisan queue:work --tries=2 --timeout=420
 ```
 
 Abre `http://localhost:8000`. Vite solo sirve los recursos durante el desarrollo; las páginas y las peticiones API salen desde Laravel.
@@ -69,7 +71,14 @@ php artisan optimize
 
 Configura el servidor web con `public/` como raíz. El fallback de `routes/web.php` permite abrir directamente rutas de Vue como `/expedientes/15`; las rutas `/api/*` siguen siendo manejadas exclusivamente por Laravel.
 
-Mantén un proceso `php artisan queue:work --tries=2 --timeout=180` activo en producción. Los DOCX y la mayoría de DOC con texto se leen sin software adicional; LibreOffice queda como respaldo opcional para DOC legados difíciles. Tesseract es opcional para documentos escaneados; cuando no está disponible, el archivo queda protegido en el panel administrativo de pendientes.
+En Ubuntu instala las dependencias de documentos con:
+
+```bash
+sudo apt update
+sudo apt install -y poppler-utils libreoffice-writer tesseract-ocr tesseract-ocr-spa
+```
+
+Mantén un proceso `php artisan queue:work --tries=2 --timeout=420` activo en producción y configura `DB_QUEUE_RETRY_AFTER=600`. Los PDF se analizan con Poppler y se almacenan como DOCX facsímiles para conservar todas sus páginas. LibreOffice procesa los DOC legados difíciles y Tesseract lee las primeras páginas escaneadas; cuando no es posible obtener la cabecera, el original queda protegido en el panel administrativo de pendientes.
 
 ## Estructura principal
 

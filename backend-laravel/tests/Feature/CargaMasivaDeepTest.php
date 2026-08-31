@@ -11,6 +11,7 @@ use App\Models\Expediente;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\CargaMasivaProcessor;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -56,13 +57,19 @@ class CargaMasivaDeepTest extends TestCase
         ]);
     }
 
-    public function test_store_validates_file_extension_only_doc_and_docx_allowed(): void
+    public function test_store_accepts_pdf_and_rejects_other_file_extensions(): void
     {
         [, $token] = $this->userWithRole('USUARIO', 'operador');
 
         $this->withToken($token)->postJson('/api/cargas-masivas', [
             'archivos' => [
                 ['nombre' => 'documento.pdf', 'tamano' => 1000],
+            ],
+        ])->assertCreated()->assertJsonPath('cargas.0.nombre', 'documento.pdf');
+
+        $this->withToken($token)->postJson('/api/cargas-masivas', [
+            'archivos' => [
+                ['nombre' => 'documento.txt', 'tamano' => 1000],
             ],
         ])->assertUnprocessable()->assertJsonValidationErrors(['archivos.0.nombre']);
     }
@@ -210,7 +217,9 @@ class CargaMasivaDeepTest extends TestCase
             ['archivo' => UploadedFile::fake()->createWithContent('exp.docx', $binary)],
             ['Accept' => 'application/json']
         )->assertNotFound();
-    }    public function test_upload_rejects_unauthenticated_requests(): void
+    }
+
+    public function test_upload_rejects_unauthenticated_requests(): void
     {
         [$user] = $this->userWithRole('USUARIO', 'operador');
         $batch = CargaMasiva::create([
@@ -285,7 +294,7 @@ class CargaMasivaDeepTest extends TestCase
         Queue::fake();
         [, $token] = $this->userWithRole('USUARIO', 'operador');
         // Create a minimal valid DOC binary (starts with OLE signature)
-        $binary = "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" . str_repeat("\x00", 100);
+        $binary = "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".str_repeat("\x00", 100);
 
         $created = $this->withToken($token)->postJson('/api/cargas-masivas', [
             'archivos' => [['nombre' => 'exp.doc', 'tamano' => strlen($binary)]],
@@ -302,6 +311,49 @@ class CargaMasivaDeepTest extends TestCase
             'id' => $itemId,
             'tipo_mime' => 'application/msword',
         ]);
+    }
+
+    public function test_upload_accepts_a_valid_pdf_and_stages_it_with_its_source_mime(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        [, $token] = $this->userWithRole('USUARIO', 'operador');
+        $binary = Pdf::loadHTML('<p>EXPEDIENTE: 90005-2026-0-1801-JR-CI-02</p>')->output();
+
+        $created = $this->withToken($token)->postJson('/api/cargas-masivas', [
+            'archivos' => [['nombre' => 'expediente.pdf', 'tamano' => strlen($binary)]],
+        ])->assertCreated()->json();
+
+        $itemId = $created['cargas'][0]['id'];
+        $this->withToken($token)->post(
+            "/api/cargas-masivas/{$created['id']}/items/{$itemId}/archivo",
+            ['archivo' => UploadedFile::fake()->createWithContent('expediente.pdf', $binary)],
+            ['Accept' => 'application/json']
+        )->assertAccepted();
+
+        $item = CargaMasivaItem::query()->findOrFail($itemId);
+        $this->assertSame('pdf', $item->extension);
+        $this->assertSame('application/pdf', $item->tipo_mime);
+        $this->assertSame(hash('sha256', $binary), $item->checksum_sha256);
+        $this->assertTrue(Storage::disk('local')->exists((string) $item->ruta_almacenamiento));
+    }
+
+    public function test_upload_rejects_a_corrupt_file_with_pdf_extension(): void
+    {
+        Storage::fake('local');
+        Queue::fake();
+        [, $token] = $this->userWithRole('USUARIO', 'operador');
+        $binary = '%PDF-not-a-real-document';
+
+        $created = $this->withToken($token)->postJson('/api/cargas-masivas', [
+            'archivos' => [['nombre' => 'expediente.pdf', 'tamano' => strlen($binary)]],
+        ])->assertCreated()->json();
+
+        $this->withToken($token)->post(
+            "/api/cargas-masivas/{$created['id']}/items/{$created['cargas'][0]['id']}/archivo",
+            ['archivo' => UploadedFile::fake()->createWithContent('expediente.pdf', $binary)],
+            ['Accept' => 'application/json']
+        )->assertUnprocessable()->assertJsonValidationErrors(['archivo']);
     }
 
     public function test_upload_stages_file_to_disk_under_carga_uuid(): void
@@ -962,6 +1014,65 @@ class CargaMasivaDeepTest extends TestCase
         $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     }
 
+    public function test_registered_pdf_item_downloads_the_converted_docx_even_if_staging_cleanup_failed(): void
+    {
+        Storage::fake('local');
+        [$admin, $token] = $this->userWithRole('ADMIN', 'admin_pdf_download');
+        $sourcePdf = Pdf::loadHTML('<p>Documento original</p>')->output();
+        $convertedDocx = $this->wordBinary('90021-2026-0-1801-JR-CI-02');
+        $path = 'cargas-masivas/test/expediente.pdf';
+        Storage::disk('local')->put($path, $sourcePdf);
+        $expediente = Expediente::create([
+            'numero' => '90021-2026-0-1801-JR-CI-02',
+            'archivo' => true,
+            'nombre_archivo' => 'expediente.docx',
+        ]);
+        $archivo = Archivo::create([
+            'expediente_id' => $expediente->id,
+            'es_principal' => true,
+            'origen' => 'carga_masiva',
+            'nombre_archivo' => 'expediente.docx',
+            'tipo_archivo' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'documento_data' => base64_encode($convertedDocx),
+        ]);
+        $batch = CargaMasiva::create([
+            'user_id' => $admin->id,
+            'estado' => 'completado',
+            'total_archivos' => 1,
+            'registro_automatico' => true,
+            'confianza_minima' => 0.65,
+        ]);
+        $item = $batch->items()->create([
+            'nombre_original' => 'expediente.pdf',
+            'extension' => 'pdf',
+            'tipo_mime' => 'application/pdf',
+            'ruta_almacenamiento' => $path,
+            'tamano_bytes' => strlen($sourcePdf),
+            'checksum_sha256' => hash('sha256', $sourcePdf),
+            'estado' => CargaMasivaItem::ESTADO_REGISTRADO,
+            'progreso' => 100,
+            'expediente_id' => $expediente->id,
+            'archivo_id' => $archivo->id,
+            'procesado_at' => now(),
+        ]);
+
+        $response = $this->withToken($token)
+            ->get("/api/admin/cargas-masivas/items/{$item->id}/download");
+
+        $response->assertOk();
+        $response->assertHeader(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
+        $this->assertStringContainsString('expediente.docx', (string) $response->headers->get('Content-Disposition'));
+        $this->assertSame($convertedDocx, $response->streamedContent());
+        $this->withToken($token)
+            ->getJson("/api/admin/cargas-masivas/items/{$item->id}")
+            ->assertOk()
+            ->assertJsonPath('nombre', 'expediente.pdf')
+            ->assertJsonPath('nombre_descarga', 'expediente.docx');
+    }
+
     public function test_download_returns_404_when_file_not_available(): void
     {
         Storage::fake('local');
@@ -1270,7 +1381,7 @@ class CargaMasivaDeepTest extends TestCase
 
     public function test_esta_terminado_returns_true_for_terminal_states(): void
     {
-        $item = new CargaMasivaItem();
+        $item = new CargaMasivaItem;
 
         $item->estado = CargaMasivaItem::ESTADO_REGISTRADO;
         $this->assertTrue($item->estaTerminado());
@@ -1287,7 +1398,7 @@ class CargaMasivaDeepTest extends TestCase
 
     public function test_esta_terminado_returns_false_for_non_terminal_states(): void
     {
-        $item = new CargaMasivaItem();
+        $item = new CargaMasivaItem;
 
         $item->estado = CargaMasivaItem::ESTADO_ESPERANDO_ARCHIVO;
         $this->assertFalse($item->estaTerminado());

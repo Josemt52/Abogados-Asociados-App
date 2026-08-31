@@ -51,7 +51,7 @@ describe('CargaMasiva', () => {
         vi.clearAllMocks();
     });
 
-    it('limita la selección a 50 documentos Word', async () => {
+    it('limita la selección a 50 documentos compatibles', async () => {
         const wrapper = mountPage();
         const files = Array.from(
             { length: 51 },
@@ -63,6 +63,31 @@ describe('CargaMasiva', () => {
         expect(wrapper.text()).toContain('50 / 50');
         expect(mocks.toastError).toHaveBeenCalledWith(
             'Puedes procesar como máximo 50 documentos por lote.',
+        );
+        wrapper.unmount();
+    });
+
+    it('acepta PDF y avisa que se guardará como DOCX', async () => {
+        const wrapper = mountPage();
+        const pdf = new File(['%PDF-documento'], 'expediente.PDF', { type: 'application/pdf' });
+
+        await selectFiles(wrapper, [pdf]);
+
+        expect(wrapper.get('input[type="file"]').attributes('accept')).toBe('.doc,.docx,.pdf');
+        expect(wrapper.text()).toContain('1 / 50');
+        expect(wrapper.text()).toContain('Se convertirá y guardará como DOCX');
+        expect(mocks.toastError).not.toHaveBeenCalled();
+        wrapper.unmount();
+    });
+
+    it('rechaza extensiones no permitidas', async () => {
+        const wrapper = mountPage();
+
+        await selectFiles(wrapper, [new File(['texto'], 'notas.txt', { type: 'text/plain' })]);
+
+        expect(wrapper.text()).toContain('0 / 50');
+        expect(mocks.toastError).toHaveBeenCalledWith(
+            'Solo se admiten documentos .doc, .docx o .pdf.',
         );
         wrapper.unmount();
     });
@@ -116,7 +141,7 @@ describe('CargaMasiva', () => {
         const wrapper = mountPage();
         const files = [
             new File(['uno'], 'uno.docx', { type: 'application/zip' }),
-            new File(['dos'], 'dos.doc', { type: 'application/msword' }),
+            new File(['dos'], 'dos.pdf', { type: 'application/pdf' }),
         ];
         mocks.create.mockResolvedValue({
             id: 'batch-1',
@@ -127,7 +152,7 @@ describe('CargaMasiva', () => {
             progreso: 0,
             cargas: [
                 { id: 10, nombre: 'uno.docx' },
-                { id: 11, nombre: 'dos.doc' },
+                { id: 11, nombre: 'dos.pdf' },
             ],
         });
         mocks.upload
@@ -166,6 +191,7 @@ describe('CargaMasiva', () => {
         expect(mocks.upload).toHaveBeenCalledTimes(2);
         expect(mocks.upload.mock.calls[0][1]).toBe(10);
         expect(mocks.upload.mock.calls[1][1]).toBe(11);
+        expect(mocks.upload.mock.calls[1][2]).toBe(files[1]);
         expect(wrapper.text()).toContain('2 de 2 procesados');
         expect(wrapper.text()).toContain('Lote procesado');
         expect(mocks.toastSuccess).toHaveBeenCalledWith('La carga masiva terminó correctamente.');

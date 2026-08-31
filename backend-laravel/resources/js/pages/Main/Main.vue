@@ -16,7 +16,7 @@ const menuItems = [
   },
   {
     title: 'Carga masiva',
-    description: 'Sube hasta 50 documentos Word y registra sus expedientes automáticamente',
+    description: 'Sube hasta 50 documentos Word o PDF y registra sus expedientes automáticamente',
     icon: Upload,
     href: '/carga-masiva',
   },

@@ -15,7 +15,7 @@ use Throwable;
 class CargaMasivaProcessor
 {
     public function __construct(
-        private readonly WordFirstPageExtractor $extractor,
+        private readonly CargaMasivaDocumentService $documents,
         private readonly ExpedienteHeaderParser $parser,
         private readonly ResolutionNumberDetector $resolutionDetector,
         private readonly ExpedienteNumberLock $numberLock,
@@ -64,7 +64,7 @@ class CargaMasivaProcessor
 
         try {
             $binary = $this->readStagedFile($item);
-            $extraction = $this->extractor->extract($binary, $item->extension);
+            $extraction = $this->documents->extract($binary, $item->extension);
             $parsed = $this->parser->parse(
                 $extraction['text'],
                 $extraction['method'],
@@ -109,22 +109,27 @@ class CargaMasivaProcessor
     /** @param array<string, mixed> $fields */
     public function approve(CargaMasivaItem $item, array $fields): CargaMasivaItem
     {
-        $binary = $this->readItemDocument($item);
+        $sourceBinary = $this->readItemDocument($item);
         $normalizedFields = $this->normalizeFields($fields);
 
         if (blank($normalizedFields['numero'])) {
             throw new InvalidArgumentException('El número de expediente es obligatorio para registrar el documento.');
         }
 
-        // La detección puede requerir LibreOffice en documentos DOC. Se ejecuta
-        // antes de tomar locks para no bloquear otros registros durante minutos.
-        $detectedResolution = $this->resolutionDetector->detect(
-            $binary,
+        // La normalización puede renderizar todas las páginas de un PDF. Se
+        // ejecuta antes de tomar locks para no bloquear otros registros.
+        $document = $this->documents->normalizeForStorage(
+            $sourceBinary,
             $item->nombre_original,
-            $item->tipo_mime
+            $item->extension
+        );
+        $detectedResolution = $this->resolutionDetector->detect(
+            $document['binary'],
+            $document['name'],
+            $document['mime']
         );
 
-        $result = DB::transaction(function () use ($item, $binary, $normalizedFields, $detectedResolution): CargaMasivaItem {
+        $result = DB::transaction(function () use ($item, $document, $normalizedFields, $detectedResolution): CargaMasivaItem {
             $locked = CargaMasivaItem::query()->lockForUpdate()->findOrFail($item->id);
             $previousExpedienteId = $locked->expediente_id;
 
@@ -147,11 +152,11 @@ class CargaMasivaProcessor
 
                 if ($archivo === null) {
                     $hasPrimaryDocument = $existing->archivoData()->exists();
-                    $archivo = $this->createArchivo($existing, $locked, $binary, ! $hasPrimaryDocument);
+                    $archivo = $this->createArchivo($existing, $document, ! $hasPrimaryDocument);
 
                     if (! $hasPrimaryDocument) {
                         $existing->archivo = true;
-                        $existing->nombre_archivo = $locked->nombre_original;
+                        $existing->nombre_archivo = $document['name'];
                         $existing->ultima_resolucion = null;
                         $existing->resolucion_detectada = $detectedResolution;
                     }
@@ -177,7 +182,7 @@ class CargaMasivaProcessor
                 [$expediente, $archivo] = $this->createCaseAndFile(
                     $locked,
                     $normalizedFields,
-                    $binary,
+                    $document,
                     $detectedResolution
                 );
                 $locked->forceFill([
@@ -233,9 +238,14 @@ class CargaMasivaProcessor
         }
 
         $detectedResolution = $this->resolutionDetector->detectInText($text);
+        $document = $this->documents->normalizeForStorage(
+            $binary,
+            $item->nombre_original,
+            $item->extension
+        );
 
         try {
-            $registered = DB::transaction(function () use ($item, $binary, $fields, $detectedResolution): CargaMasivaItem {
+            $registered = DB::transaction(function () use ($item, $document, $fields, $detectedResolution): CargaMasivaItem {
                 $locked = CargaMasivaItem::query()->lockForUpdate()->findOrFail($item->id);
                 $normalizedNumber = $this->numberLock->acquire($fields['numero']);
                 $existing = Expediente::query()
@@ -260,7 +270,7 @@ class CargaMasivaProcessor
                 [$expediente, $archivo] = $this->createCaseAndFile(
                     $locked,
                     $fields,
-                    $binary,
+                    $document,
                     $detectedResolution
                 );
                 $locked->forceFill([
@@ -295,7 +305,7 @@ class CargaMasivaProcessor
     private function createCaseAndFile(
         CargaMasivaItem $item,
         array $fields,
-        string $binary,
+        array $document,
         ?int $detectedResolution,
     ): array {
         $expediente = Expediente::create([
@@ -308,25 +318,26 @@ class CargaMasivaProcessor
             'demandante' => $this->joinParties($fields['demandante']),
             'estado' => null,
             'archivo' => true,
-            'nombre_archivo' => $item->nombre_original,
+            'nombre_archivo' => $document['name'],
             'ultima_resolucion' => null,
             'resolucion_detectada' => $detectedResolution,
             'requiere_revision' => false,
         ]);
-        $archivo = $this->createArchivo($expediente, $item, $binary, true);
+        $archivo = $this->createArchivo($expediente, $document, true);
 
         return [$expediente, $archivo];
     }
 
-    private function createArchivo(Expediente $expediente, CargaMasivaItem $item, string $binary, bool $primary): Archivo
+    /** @param array{binary: string, name: string, mime: string, extension: string} $document */
+    private function createArchivo(Expediente $expediente, array $document, bool $primary): Archivo
     {
         return Archivo::create([
             'expediente_id' => $expediente->id,
             'es_principal' => $primary,
             'origen' => 'carga_masiva',
-            'nombre_archivo' => $item->nombre_original,
-            'tipo_archivo' => $item->tipo_mime ?: $this->mimeFor($item->extension),
-            'documento_data' => base64_encode($binary),
+            'nombre_archivo' => $document['name'],
+            'tipo_archivo' => $document['mime'],
+            'documento_data' => base64_encode($document['binary']),
         ]);
     }
 
@@ -487,13 +498,6 @@ class CargaMasivaProcessor
         $value = trim(implode("\n", array_filter($parties)));
 
         return $value === '' ? null : $value;
-    }
-
-    private function mimeFor(string $extension): string
-    {
-        return strtolower($extension) === 'doc'
-            ? 'application/msword'
-            : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     }
 
     private function isUniqueConstraintViolation(QueryException $exception): bool

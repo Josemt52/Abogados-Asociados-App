@@ -31,6 +31,10 @@ describe('RichTextEditor', () => {
         expect(wrapper.get('[role="toolbar"]').attributes('aria-label')).toBe(
             'Herramientas de formato',
         );
+        expect(wrapper.get('section').classes()).toContain('overflow-clip');
+        expect(wrapper.get('[role="toolbar"]').classes()).toEqual(
+            expect.arrayContaining(['sticky', 'top-0', 'z-10']),
+        );
         expect(wrapper.get('[role="textbox"]').attributes('aria-label')).toBe(
             'Contenido de la resolución',
         );

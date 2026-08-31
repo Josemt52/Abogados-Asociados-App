@@ -7,7 +7,7 @@ use App\Jobs\ProcessCargaMasivaItem;
 use App\Models\CargaMasiva;
 use App\Models\CargaMasivaItem;
 use App\Models\ConfiguracionCargaMasiva;
-use App\Services\WordFirstPageExtractor;
+use App\Services\CargaMasivaDocumentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,9 +32,9 @@ class CargaMasivaController extends Controller
             $name = $this->safeName($file['nombre']);
             $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
 
-            if (! in_array($extension, ['doc', 'docx'], true)) {
+            if (! in_array($extension, ['doc', 'docx', 'pdf'], true)) {
                 throw ValidationException::withMessages([
-                    "archivos.$index.nombre" => 'Solo se permiten documentos .doc o .docx.',
+                    "archivos.$index.nombre" => 'Solo se permiten documentos .doc, .docx o .pdf.',
                 ]);
             }
 
@@ -77,14 +77,14 @@ class CargaMasivaController extends Controller
         Request $request,
         CargaMasiva $carga,
         CargaMasivaItem $item,
-        WordFirstPageExtractor $extractor,
+        CargaMasivaDocumentService $documents,
     ): JsonResponse {
         $this->authorizeOwner($carga);
         $this->assertItemBelongsToBatch($carga, $item);
 
         $maxKilobytes = (int) config('carga_masiva.max_kilobytes_por_archivo', 10240);
         $request->validate([
-            'archivo' => ['required', 'file', 'extensions:doc,docx', 'max:'.$maxKilobytes],
+            'archivo' => ['required', 'file', 'extensions:doc,docx,pdf', 'max:'.$maxKilobytes],
         ]);
 
         $uploaded = $request->file('archivo');
@@ -116,7 +116,7 @@ class CargaMasivaController extends Controller
         }
 
         try {
-            $extractor->assertValid($binary, $extension);
+            $documents->assertValid($binary, $extension);
         } catch (\InvalidArgumentException $exception) {
             throw ValidationException::withMessages(['archivo' => $exception->getMessage()]);
         }
@@ -147,9 +147,11 @@ class CargaMasivaController extends Controller
 
                 $locked->forceFill([
                     'ruta_almacenamiento' => $path,
-                    'tipo_mime' => $extension === 'doc'
-                        ? 'application/msword'
-                        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'tipo_mime' => match ($extension) {
+                        'doc' => 'application/msword',
+                        'pdf' => 'application/pdf',
+                        default => CargaMasivaDocumentService::DOCX_MIME,
+                    },
                     'tamano_bytes' => strlen($binary),
                     'checksum_sha256' => $checksum,
                     'estado' => CargaMasivaItem::ESTADO_EN_COLA,

@@ -9,6 +9,7 @@ type Phase = 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
 
 const MAX_FILES = 50;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = new Set(['doc', 'docx', 'pdf']);
 const toast = useToast();
 const files = ref<File[]>([]);
 const dragging = ref(false);
@@ -26,6 +27,7 @@ const canEditSelection = computed(() => phase.value === 'idle' && batch.value ==
 const processed = computed(() => serverProgress.value?.procesados ?? 0);
 const total = computed(() => serverProgress.value?.total ?? files.value.length);
 const overallProgress = computed(() => serverProgress.value?.progreso ?? 0);
+const isPdf = (file: File): boolean => file.name.toLowerCase().endsWith('.pdf');
 
 const formatSize = (bytes: number): string => {
     if (bytes < 1024 * 1024) {
@@ -46,7 +48,7 @@ const selectFiles = (incoming: FileList | File[]): void => {
 
     for (const file of Array.from(incoming)) {
         const extension = file.name.split('.').pop()?.toLowerCase();
-        if (extension !== 'doc' && extension !== 'docx') {
+        if (!extension || !ALLOWED_EXTENSIONS.has(extension)) {
             rejectedType += 1;
             continue;
         }
@@ -64,7 +66,7 @@ const selectFiles = (incoming: FileList | File[]): void => {
         toast.error('Puedes procesar como máximo 50 documentos por lote.');
     }
     if (rejectedType > 0) {
-        toast.error('Solo se admiten documentos Word .doc o .docx.');
+        toast.error('Solo se admiten documentos .doc, .docx o .pdf.');
     }
     if (rejectedSize > 0) {
         toast.error('Cada documento debe pesar entre 1 byte y 10 MB.');
@@ -233,8 +235,8 @@ onBeforeUnmount(() => {
                     Carga masiva de expedientes
                 </h1>
                 <p class="mt-2 max-w-3xl text-slate-600">
-                    Selecciona hasta 50 documentos Word. El sistema leerá cada cabecera y registrará
-                    los expedientes automáticamente.
+                    Selecciona hasta 50 documentos Word o PDF. El sistema leerá cada cabecera y registrará
+                    los expedientes automáticamente; cada PDF se convertirá y guardará como DOCX.
                 </p>
             </div>
 
@@ -261,13 +263,13 @@ onBeforeUnmount(() => {
                         @drop.prevent="handleDrop"
                     >
                         <Upload class="mx-auto h-12 w-12 text-blue-700" />
-                        <p class="mt-4 font-semibold text-slate-900">Arrastra aquí tus archivos Word</p>
+                        <p class="mt-4 font-semibold text-slate-900">Arrastra aquí tus documentos Word o PDF</p>
                         <p class="mt-1 text-sm text-slate-500">o selecciónalos desde tu equipo</p>
                         <label class="mt-5 inline-block cursor-pointer">
                             <input
                                 type="file"
                                 class="sr-only"
-                                accept=".doc,.docx"
+                                accept=".doc,.docx,.pdf"
                                 multiple
                                 @change="handleInput"
                             />
@@ -277,7 +279,7 @@ onBeforeUnmount(() => {
                                 Seleccionar documentos
                             </span>
                         </label>
-                        <p class="mt-3 text-xs text-slate-500">Solo .doc y .docx · máximo 10 MB por archivo</p>
+                        <p class="mt-3 text-xs text-slate-500">.doc, .docx y .pdf · máximo 10 MB por archivo</p>
                     </div>
 
                     <div v-if="files.length > 0" class="space-y-3">
@@ -302,6 +304,9 @@ onBeforeUnmount(() => {
                                 <div class="min-w-0 flex-1">
                                     <p class="truncate text-sm font-medium text-slate-900">{{ file.name }}</p>
                                     <p class="text-xs text-slate-500">{{ formatSize(file.size) }}</p>
+                                    <p v-if="isPdf(file)" class="mt-0.5 text-xs font-medium text-blue-700">
+                                        Se convertirá y guardará como DOCX
+                                    </p>
                                 </div>
                                 <span
                                     v-if="index < uploadedCount"

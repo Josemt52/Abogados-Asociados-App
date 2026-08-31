@@ -5,6 +5,8 @@ interface TableColumn {
   key: string;
   label?: string;
   header?: string;
+  headerClass?: string;
+  cellClass?: string;
 }
 
 // Las filas son deliberadamente genéricas: la tabla se comparte entre
@@ -18,12 +20,16 @@ const props = withDefaults(
     data?: TableRow[];
     loading?: boolean;
     emptyMessage?: string;
+    fixedLayout?: boolean;
+    stackOnMobile?: boolean;
   }>(),
   {
     rows: () => [],
     data: undefined,
     loading: false,
     emptyMessage: 'No hay datos disponibles',
+    fixedLayout: false,
+    stackOnMobile: false,
   },
 );
 
@@ -62,14 +68,23 @@ const cellValue = (row: TableRow, key: string) => row[key];
     v-else
     class="overflow-hidden rounded-lg bg-white shadow-sm"
   >
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
+    <div :class="props.stackOnMobile ? 'overflow-visible' : 'overflow-x-auto'">
+      <table
+        :class="[
+          'min-w-full divide-y divide-gray-200',
+          props.fixedLayout ? 'table-fixed' : '',
+          props.stackOnMobile ? 'stacked-table' : '',
+        ]"
+      >
         <thead class="bg-gray-50">
           <tr>
             <th
               v-for="column in props.columns"
               :key="column.key"
-              class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
+              :class="[
+                'px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500',
+                column.headerClass,
+              ]"
             >
               {{ columnLabel(column) }}
             </th>
@@ -79,7 +94,7 @@ const cellValue = (row: TableRow, key: string) => row[key];
           <tr v-if="displayedRows.length === 0">
             <td
               :colspan="props.columns.length"
-              class="px-6 py-12 text-center text-gray-500"
+              class="empty-cell px-6 py-12 text-center text-gray-500"
             >
               {{ props.emptyMessage }}
             </td>
@@ -90,15 +105,18 @@ const cellValue = (row: TableRow, key: string) => row[key];
               :key="String(row.id ?? index)"
               :class="[
                 hasRowClickListener ? 'cursor-pointer hover:bg-gray-50' : '',
-                'transition-colors',
+                'data-row transition-colors',
               ]"
               @click="emit('row-click', row)"
             >
               <td
                 v-for="column in props.columns"
                 :key="column.key"
-                class="px-6 py-4 text-sm text-gray-900"
-                style="max-width: 200px"
+                :data-label="columnLabel(column)"
+                :class="[
+                  'px-6 py-4 text-sm text-gray-900',
+                  column.cellClass ?? 'max-w-[200px]',
+                ]"
               >
                 <slot
                   :name="`cell-${column.key}`"
@@ -125,3 +143,58 @@ const cellValue = (row: TableRow, key: string) => row[key];
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 1279px) {
+  .stacked-table,
+  .stacked-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .stacked-table thead {
+    display: none;
+  }
+
+  .stacked-table tbody {
+    padding: 0.75rem;
+  }
+
+  .stacked-table tbody .data-row {
+    display: block;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+  }
+
+  .stacked-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .stacked-table td[data-label] {
+    display: grid;
+    grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
+    max-width: none !important;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    overflow-wrap: anywhere;
+  }
+
+  .stacked-table td[data-label]::before {
+    content: attr(data-label);
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    line-height: 1rem;
+    text-transform: uppercase;
+  }
+
+  .stacked-table .empty-cell {
+    display: block;
+    max-width: none;
+  }
+}
+</style>

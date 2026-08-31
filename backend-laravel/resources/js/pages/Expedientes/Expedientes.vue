@@ -30,10 +30,15 @@ const selectedViewerRow = ref<Expediente | null>(null);
 let viewerRequestId = 0;
 
 const columns = [
-    { key: 'numero', label: 'Número de expediente' },
-    { key: 'materia', label: 'Materia' },
-    { key: 'estado', label: 'Estado' },
-    { key: 'acciones', label: 'Acciones' },
+    { key: 'numero', label: 'Número de expediente', headerClass: 'xl:w-[25%]' },
+    { key: 'materia', label: 'Materia', headerClass: 'xl:w-[18%]' },
+    { key: 'estado', label: 'Estado', headerClass: 'xl:w-[15%]' },
+    {
+        key: 'acciones',
+        label: 'Acciones',
+        headerClass: 'xl:w-[42%]',
+        cellClass: 'max-w-none',
+    },
 ];
 
 const expedienteRows = computed(() => (Array.isArray(expedientes.value) ? expedientes.value : []));
@@ -251,9 +256,9 @@ onBeforeUnmount(() => {
             <div class="flex items-start space-x-4 sm:items-center">
                 <RouterLink
                     to="/main"
-                    class="inline-flex min-h-11 items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                    class="inline-flex min-h-12 items-center rounded-lg bg-blue-700 px-5 py-3 text-base font-semibold text-white shadow-md transition-colors hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                    <ArrowLeft class="mr-2 h-4 w-4" />
+                    <ArrowLeft class="mr-2 h-5 w-5" />
                     Volver
                 </RouterLink>
                 <div>
@@ -316,6 +321,8 @@ onBeforeUnmount(() => {
             :columns="columns"
             :rows="paginatedExpedientes"
             :loading="loading"
+            fixed-layout
+            stack-on-mobile
             empty-message="No se encontraron expedientes"
             @row-click="handleRowClick"
         >
@@ -342,10 +349,10 @@ onBeforeUnmount(() => {
             </template>
 
             <template #cell-acciones="{ row }">
-                <div class="grid min-w-[18rem] grid-cols-1 gap-2 lg:min-w-[34rem] lg:grid-cols-3">
+                <div class="grid min-w-0 grid-cols-1 gap-2 xl:grid-cols-3">
                     <button
                         type="button"
-                        class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                        class="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold leading-tight text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                         @click.stop="handleRowClick(row)"
                     >
                         <FolderOpen class="mr-2 h-5 w-5" aria-hidden="true" />
@@ -353,7 +360,7 @@ onBeforeUnmount(() => {
                     </button>
                     <button
                         type="button"
-                        class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold leading-tight text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="!row.archivo"
                         :title="row.archivo ? 'Ver documento' : 'Este expediente no tiene un documento asociado'"
                         @click.stop="handleViewClick(row)"
@@ -363,7 +370,7 @@ onBeforeUnmount(() => {
                     </button>
                     <button
                         type="button"
-                        class="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                        class="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold leading-tight text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                         title="Redactar la siguiente resolución"
                         @click.stop="handleUpdateExpediente(row)"
                     >

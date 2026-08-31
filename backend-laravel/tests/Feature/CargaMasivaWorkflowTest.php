@@ -9,7 +9,9 @@ use App\Models\CargaMasivaItem;
 use App\Models\Expediente;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\CargaMasivaDocumentService;
 use App\Services\CargaMasivaProcessor;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -156,6 +158,74 @@ class CargaMasivaWorkflowTest extends TestCase
         Storage::disk('local')->assertMissing('cargas-masivas/test/expediente.docx');
     }
 
+    public function test_processor_stores_a_pdf_upload_as_a_docx_document(): void
+    {
+        Storage::fake('local');
+        [$user] = $this->userWithRole('USUARIO', 'operador_pdf');
+        $number = '00459-2026-0-1801-JR-CI-02';
+        $pdf = Pdf::loadHTML("<p>EXPEDIENTE: {$number}</p>")->output();
+        $docx = $this->wordBinary($number);
+        $path = 'cargas-masivas/test/expediente.pdf';
+        Storage::disk('local')->put($path, $pdf);
+        $batch = CargaMasiva::create([
+            'user_id' => $user->id,
+            'estado' => 'procesando',
+            'total_archivos' => 1,
+            'registro_automatico' => true,
+            'confianza_minima' => 0.65,
+        ]);
+        $item = $batch->items()->create([
+            'nombre_original' => 'expediente.pdf',
+            'extension' => 'pdf',
+            'tipo_mime' => 'application/pdf',
+            'ruta_almacenamiento' => $path,
+            'tamano_bytes' => strlen($pdf),
+            'checksum_sha256' => hash('sha256', $pdf),
+            'estado' => CargaMasivaItem::ESTADO_EN_COLA,
+            'progreso' => 5,
+        ]);
+        $header = implode("\n", [
+            "EXPEDIENTE: {$number}",
+            'MATERIA: CIVIL',
+            'JUZGADO: PRIMER JUZGADO CIVIL',
+            'ESPECIALISTA: ANA PÉREZ',
+            'TERCERO: EMPRESA TERCERA',
+            'DEMANDADO: JUAN DEMANDADO',
+            'DEMANDANTE: MARÍA DEMANDANTE',
+        ]);
+        $documents = $this->mock(CargaMasivaDocumentService::class);
+        $documents->shouldReceive('extract')->once()->with($pdf, 'pdf')->andReturn([
+            'text' => $header,
+            'method' => 'pdf_text',
+            'ocr_confidence' => null,
+            'page_boundary' => 'explicit',
+        ]);
+        $documents->shouldReceive('normalizeForStorage')
+            ->once()
+            ->with($pdf, 'expediente.pdf', 'pdf')
+            ->andReturn([
+                'binary' => $docx,
+                'name' => 'expediente.docx',
+                'mime' => CargaMasivaDocumentService::DOCX_MIME,
+                'extension' => 'docx',
+            ]);
+
+        app(CargaMasivaProcessor::class)->process($item->id);
+
+        $item->refresh();
+        $this->assertSame(CargaMasivaItem::ESTADO_REGISTRADO, $item->estado);
+        $this->assertDatabaseHas('expedientes', [
+            'id' => $item->expediente_id,
+            'numero' => $number,
+            'nombre_archivo' => 'expediente.docx',
+        ]);
+        $archivo = Archivo::query()->whereKey($item->archivo_id)->sole();
+        $this->assertSame('expediente.docx', $archivo->nombre_archivo);
+        $this->assertSame(CargaMasivaDocumentService::DOCX_MIME, $archivo->tipo_archivo);
+        $this->assertSame($docx, base64_decode($archivo->documento_data, true));
+        Storage::disk('local')->assertMissing($path);
+    }
+
     public function test_processor_recovers_an_item_left_processing_after_a_worker_interruption(): void
     {
         Storage::fake('local');
@@ -229,6 +299,75 @@ class CargaMasivaWorkflowTest extends TestCase
         $this->assertSame($primary->id, $existing->fresh()->archivoData->id);
         $this->assertFalse($existing->fresh()->requiere_revision);
         Storage::disk('local')->assertMissing('cargas-masivas/test/expediente.docx');
+    }
+
+    public function test_admin_approval_converts_a_duplicate_pdf_before_storing_the_secondary_document(): void
+    {
+        Storage::fake('local');
+        [$user] = $this->userWithRole('USUARIO', 'operador_pdf_duplicate');
+        $number = '00789-2026-0-1801-JR-CI-04';
+        $pdf = Pdf::loadHTML("<p>EXPEDIENTE: {$number}</p>")->output();
+        $docx = $this->wordBinary($number);
+        $existing = Expediente::create([
+            'numero' => $number,
+            'archivo' => true,
+            'nombre_archivo' => 'principal.docx',
+            'requiere_revision' => true,
+        ]);
+        $primary = Archivo::create([
+            'expediente_id' => $existing->id,
+            'es_principal' => true,
+            'origen' => 'manual',
+            'nombre_archivo' => 'principal.docx',
+            'tipo_archivo' => CargaMasivaDocumentService::DOCX_MIME,
+            'documento_data' => base64_encode('principal'),
+        ]);
+        $path = 'cargas-masivas/test/duplicado.pdf';
+        Storage::disk('local')->put($path, $pdf);
+        $batch = CargaMasiva::create([
+            'user_id' => $user->id,
+            'estado' => 'completado',
+            'total_archivos' => 1,
+            'registro_automatico' => true,
+            'confianza_minima' => 0.65,
+        ]);
+        $item = $batch->items()->create([
+            'nombre_original' => 'duplicado.pdf',
+            'extension' => 'pdf',
+            'tipo_mime' => 'application/pdf',
+            'ruta_almacenamiento' => $path,
+            'tamano_bytes' => strlen($pdf),
+            'checksum_sha256' => hash('sha256', $pdf),
+            'estado' => CargaMasivaItem::ESTADO_REVISION,
+            'progreso' => 100,
+            'expediente_id' => $existing->id,
+            'motivo_revision' => 'numero_duplicado',
+            'es_duplicado' => true,
+        ]);
+        $documents = $this->mock(CargaMasivaDocumentService::class);
+        $documents->shouldReceive('normalizeForStorage')
+            ->once()
+            ->with($pdf, 'duplicado.pdf', 'pdf')
+            ->andReturn([
+                'binary' => $docx,
+                'name' => 'duplicado.docx',
+                'mime' => CargaMasivaDocumentService::DOCX_MIME,
+                'extension' => 'docx',
+            ]);
+
+        $resolved = app(CargaMasivaProcessor::class)->approve($item, [
+            'numero' => $number,
+            'materia' => 'Civil',
+        ]);
+
+        $this->assertSame(CargaMasivaItem::ESTADO_REGISTRADO, $resolved->estado);
+        $this->assertSame(2, $existing->archivos()->count());
+        $secondary = $existing->archivos()->whereKeyNot($primary->id)->sole();
+        $this->assertSame('duplicado.docx', $secondary->nombre_archivo);
+        $this->assertSame(CargaMasivaDocumentService::DOCX_MIME, $secondary->tipo_archivo);
+        $this->assertSame($docx, base64_decode($secondary->documento_data, true));
+        $this->assertSame($primary->id, $existing->fresh()->archivoData->id);
+        Storage::disk('local')->assertMissing($path);
     }
 
     public function test_correcting_a_duplicate_to_a_new_number_clears_the_old_case_review_flag(): void

@@ -175,9 +175,9 @@ const retry = async (item: AdminImportItem): Promise<void> => {
 
 const download = async (item: AdminImportItem): Promise<void> => {
     try {
-        downloadBlob(await adminCargasMasivasAPI.download(item.id), item.nombre);
+        downloadBlob(await adminCargasMasivasAPI.download(item.id), item.nombre_descarga);
     } catch {
-        toast.error('No se pudo descargar el documento original.');
+        toast.error('No se pudo descargar el documento.');
     }
 };
 
@@ -340,7 +340,7 @@ onMounted(async () => {
                                         <button
                                             type="button"
                                             class="rounded-md border border-slate-300 p-2 text-slate-600 hover:bg-slate-100"
-                                            title="Descargar original"
+                                            title="Descargar documento"
                                             @click="download(item)"
                                         >
                                             <Download class="h-4 w-4" />
@@ -387,7 +387,7 @@ onMounted(async () => {
                 <div v-if="selectedItem?.es_duplicado" class="flex gap-3 rounded-lg border border-violet-200 bg-violet-50 p-4">
                     <AlertCircle class="h-5 w-5 shrink-0 text-violet-700" />
                     <p class="text-sm text-violet-900">
-                        Este número ya existe. Al aprobar, el Word se conservará como documento adicional del expediente
+                        Este número ya existe. Al aprobar, el documento se conservará como archivo adicional del expediente
                         <strong>{{ selectedItem.expediente?.numero }}</strong>.
                     </p>
                 </div>

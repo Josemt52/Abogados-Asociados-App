@@ -184,7 +184,7 @@ watch(
 </script>
 
 <template>
-    <section class="overflow-hidden rounded-xl border border-gray-300 bg-gray-100 shadow-sm">
+    <section class="overflow-clip rounded-xl border border-gray-300 bg-gray-100 shadow-sm">
         <div
             class="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-gray-300 bg-white p-3"
             role="toolbar"

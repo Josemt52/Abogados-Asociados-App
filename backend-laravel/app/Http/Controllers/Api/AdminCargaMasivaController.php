@@ -37,6 +37,7 @@ class AdminCargaMasivaController extends Controller
                 'carga:id,uuid,user_id,created_at',
                 'carga.usuario:id,nombre,username',
                 'expediente:id,numero',
+                'archivo:id,nombre_archivo,tipo_archivo',
             ])
             ->when(
                 $validated['estado'] ?? null,
@@ -80,7 +81,11 @@ class AdminCargaMasivaController extends Controller
 
     public function show(CargaMasivaItem $item): JsonResponse
     {
-        return response()->json($this->itemPayload($item->load(['carga.usuario', 'expediente'])));
+        return response()->json($this->itemPayload($item->load([
+            'carga.usuario',
+            'expediente',
+            'archivo:id,nombre_archivo,tipo_archivo',
+        ])));
     }
 
     public function approve(Request $request, CargaMasivaItem $item, CargaMasivaProcessor $processor): JsonResponse
@@ -110,7 +115,7 @@ class AdminCargaMasivaController extends Controller
             'message' => $resolved->es_duplicado
                 ? 'El documento quedó asociado al expediente existente.'
                 : 'El expediente fue registrado correctamente.',
-            'item' => $this->itemPayload($resolved),
+            'item' => $this->itemPayload($resolved->loadMissing('archivo:id,nombre_archivo,tipo_archivo')),
         ]);
     }
 
@@ -171,17 +176,30 @@ class AdminCargaMasivaController extends Controller
     public function download(CargaMasivaItem $item): StreamedResponse|JsonResponse
     {
         $binary = null;
+        $name = $item->nombre_original;
+        $mime = $item->tipo_mime ?: 'application/octet-stream';
+        $archivo = $item->archivo;
+        $preferConverted = $item->estado === CargaMasivaItem::ESTADO_REGISTRADO && $archivo !== null;
 
-        if (filled($item->ruta_almacenamiento)) {
+        if ($preferConverted) {
+            $decoded = base64_decode((string) $archivo->documento_data, true);
+            $binary = is_string($decoded) ? $decoded : null;
+            $name = $archivo->nombre_archivo;
+            $mime = $archivo->tipo_archivo ?: 'application/octet-stream';
+        }
+
+        if (! $preferConverted && filled($item->ruta_almacenamiento)) {
             $disk = Storage::disk((string) config('carga_masiva.disk', 'local'));
             if ($disk->exists((string) $item->ruta_almacenamiento)) {
                 $binary = $disk->get((string) $item->ruta_almacenamiento);
             }
         }
 
-        if (! is_string($binary) && $item->archivo) {
-            $decoded = base64_decode((string) $item->archivo->documento_data, true);
+        if (! is_string($binary) && $archivo) {
+            $decoded = base64_decode((string) $archivo->documento_data, true);
             $binary = is_string($decoded) ? $decoded : null;
+            $name = $archivo->nombre_archivo;
+            $mime = $archivo->tipo_archivo ?: 'application/octet-stream';
         }
 
         if (! is_string($binary) || $binary === '') {
@@ -190,9 +208,9 @@ class AdminCargaMasivaController extends Controller
 
         return response()->streamDownload(
             static fn () => print ($binary),
-            $this->safeName($item->nombre_original),
+            $this->safeName($name),
             [
-                'Content-Type' => $item->tipo_mime ?: 'application/octet-stream',
+                'Content-Type' => $mime,
                 'X-Content-Type-Options' => 'nosniff',
             ]
         );
@@ -228,6 +246,9 @@ class AdminCargaMasivaController extends Controller
         return [
             'id' => $item->id,
             'nombre' => $item->nombre_original,
+            'nombre_descarga' => $item->estado === CargaMasivaItem::ESTADO_REGISTRADO && $item->archivo
+                ? $item->archivo->nombre_archivo
+                : $item->nombre_original,
             'extension' => $item->extension,
             'tamano' => (int) $item->tamano_bytes,
             'estado' => $item->estado,

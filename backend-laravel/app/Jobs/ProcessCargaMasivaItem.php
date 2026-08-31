@@ -16,7 +16,7 @@ class ProcessCargaMasivaItem implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 180;
+    public int $timeout = 420;
 
     public bool $failOnTimeout = true;
 

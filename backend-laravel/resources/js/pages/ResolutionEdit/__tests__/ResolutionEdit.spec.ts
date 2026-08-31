@@ -129,4 +129,24 @@ describe('ResolutionEdit', () => {
 
         wrapper.unmount();
     });
+
+    it('mantiene la cabecera fuera del área desplazable del editor', async () => {
+        const wrapper = mount(ResolutionEdit, {
+            global: {
+                stubs: { RichTextEditor: RichTextEditorStub },
+            },
+        });
+        await flushPromises();
+
+        expect(wrapper.get('main[aria-label="Editor de resolución"]').classes()).toEqual(
+            expect.arrayContaining(['flex', 'h-dvh', 'flex-col', 'overflow-hidden']),
+        );
+        expect(wrapper.get('header').classes()).toContain('shrink-0');
+        expect(wrapper.get('header').classes()).not.toContain('sticky');
+        expect(wrapper.get('[data-testid="resolution-editor-scroll"]').classes()).toEqual(
+            expect.arrayContaining(['min-h-0', 'flex-1', 'overflow-y-auto']),
+        );
+
+        wrapper.unmount();
+    });
 });

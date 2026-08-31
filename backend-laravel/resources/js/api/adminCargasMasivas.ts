@@ -17,6 +17,7 @@ export interface ExtractedCaseData {
 export interface AdminImportItem {
     id: number;
     nombre: string;
+    nombre_descarga: string;
     extension: string;
     tamano: number;
     estado: AdminImportStatus;

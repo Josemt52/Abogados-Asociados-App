@@ -292,8 +292,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <main class="min-h-screen bg-gray-100" aria-label="Editor de resolución">
-        <header class="sticky top-0 z-20 border-b border-gray-300 bg-white shadow-sm">
+    <main class="flex h-screen h-dvh flex-col overflow-hidden bg-gray-100" aria-label="Editor de resolución">
+        <header class="relative z-20 shrink-0 border-b border-gray-300 bg-white shadow-sm">
             <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
                 <div class="min-w-0">
                     <p class="text-sm font-semibold uppercase tracking-wide text-gray-500">Editar resolución</p>
@@ -337,63 +337,71 @@ onBeforeUnmount(() => {
             </div>
         </header>
 
-        <div v-if="loading" class="flex min-h-[60vh] items-center justify-center px-4">
+        <div v-if="loading" class="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4">
             <div class="text-center" role="status" aria-live="polite">
                 <div class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-gray-800" />
                 <p class="text-lg font-medium text-gray-700">Preparando la resolución...</p>
             </div>
         </div>
 
-        <div v-else-if="loadError" class="mx-auto max-w-xl px-4 py-20 text-center">
-            <h2 class="text-xl font-bold text-gray-900">No se pudo abrir el editor</h2>
-            <p class="mt-3 text-gray-600">{{ loadError }}</p>
-            <div class="mt-6 flex flex-wrap justify-center gap-3">
-                <Button variant="outline" size="lg" @click="handleClose">Volver al expediente</Button>
-                <Button variant="primary" size="lg" @click="loadEditor">Reintentar</Button>
+        <div v-else-if="loadError" class="min-h-0 flex-1 overflow-y-auto">
+            <div class="mx-auto max-w-xl px-4 py-20 text-center">
+                <h2 class="text-xl font-bold text-gray-900">No se pudo abrir el editor</h2>
+                <p class="mt-3 text-gray-600">{{ loadError }}</p>
+                <div class="mt-6 flex flex-wrap justify-center gap-3">
+                    <Button variant="outline" size="lg" @click="handleClose">Volver al expediente</Button>
+                    <Button variant="primary" size="lg" @click="loadEditor">Reintentar</Button>
+                </div>
             </div>
         </div>
 
-        <div v-else-if="payload" class="mx-auto max-w-7xl p-3 sm:p-6">
-            <RichTextEditor
-                v-model="content"
-                :disabled="isBusy"
-                :aria-label="`Contenido de la resolución ${payload.numero}`"
-            >
-                <template #before-content>
-                    <div class="mb-8 font-[Arial] text-[12pt] text-gray-950">
-                        <div class="ml-auto w-full max-w-xl" aria-label="Cabecera editable del expediente">
-                            <p class="mb-3 text-sm font-semibold text-gray-700">
-                                Datos de la cabecera
-                            </p>
-                            <div
-                                v-for="field in headerFields"
-                                :key="field.key"
-                                class="mb-2 grid grid-cols-[minmax(7rem,auto)_1rem_minmax(0,1fr)] items-center gap-x-1"
-                            >
-                                <label :for="`header-${field.key}`">
-                                    {{ field.label }}<span v-if="field.required" aria-hidden="true"> *</span>
-                                </label>
-                                <span aria-hidden="true">:</span>
-                                <input
-                                    :id="`header-${field.key}`"
-                                    v-model="headerData[field.key]"
-                                    type="text"
-                                    :required="field.required"
-                                    :maxlength="field.maxLength"
-                                    :disabled="isBusy"
-                                    autocomplete="off"
-                                    class="min-h-9 w-full rounded border border-gray-300 bg-white px-2 py-1 font-[Arial] text-[12pt] uppercase text-gray-950 shadow-sm focus:border-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:bg-gray-100"
-                                />
+        <div
+            v-else-if="payload"
+            data-testid="resolution-editor-scroll"
+            class="min-h-0 flex-1 overflow-y-auto"
+        >
+            <div class="mx-auto max-w-7xl p-3 sm:p-6">
+                <RichTextEditor
+                    v-model="content"
+                    :disabled="isBusy"
+                    :aria-label="`Contenido de la resolución ${payload.numero}`"
+                >
+                    <template #before-content>
+                        <div class="mb-8 font-[Arial] text-[12pt] text-gray-950">
+                            <div class="ml-auto w-full max-w-xl" aria-label="Cabecera editable del expediente">
+                                <p class="mb-3 text-sm font-semibold text-gray-700">
+                                    Datos de la cabecera
+                                </p>
+                                <div
+                                    v-for="field in headerFields"
+                                    :key="field.key"
+                                    class="mb-2 grid grid-cols-[minmax(7rem,auto)_1rem_minmax(0,1fr)] items-center gap-x-1"
+                                >
+                                    <label :for="`header-${field.key}`">
+                                        {{ field.label }}<span v-if="field.required" aria-hidden="true"> *</span>
+                                    </label>
+                                    <span aria-hidden="true">:</span>
+                                    <input
+                                        :id="`header-${field.key}`"
+                                        v-model="headerData[field.key]"
+                                        type="text"
+                                        :required="field.required"
+                                        :maxlength="field.maxLength"
+                                        :disabled="isBusy"
+                                        autocomplete="off"
+                                        class="min-h-9 w-full rounded border border-gray-300 bg-white px-2 py-1 font-[Arial] text-[12pt] uppercase text-gray-950 shadow-sm focus:border-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:bg-gray-100"
+                                    />
+                                </div>
+                                <p class="mt-2 text-xs text-gray-500">
+                                    Los campos vacíos no aparecerán en el documento generado.
+                                </p>
                             </div>
-                            <p class="mt-2 text-xs text-gray-500">
-                                Los campos vacíos no aparecerán en el documento generado.
-                            </p>
-                        </div>
 
-                        <h2 class="mt-8 font-bold">RESOLUCIÓN N° {{ payload.numero }}</h2>
-                    </div>
-                </template>
-            </RichTextEditor>
+                            <h2 class="mt-8 font-bold">RESOLUCIÓN N° {{ payload.numero }}</h2>
+                        </div>
+                    </template>
+                </RichTextEditor>
+            </div>
         </div>
     </main>
 </template>
