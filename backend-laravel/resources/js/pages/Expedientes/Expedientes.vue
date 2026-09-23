@@ -35,7 +35,7 @@ const columns = [
     { key: 'estado', label: 'Estado', headerClass: 'xl:w-[15%]' },
     {
         key: 'acciones',
-        label: 'Acciones',
+        label: 'Acciones disponibles',
         headerClass: 'xl:w-[42%]',
         cellClass: 'max-w-none',
     },
@@ -67,7 +67,7 @@ const paginatedExpedientes = computed(() => {
     return filteredExpedientes.value.slice(start, start + pageSize);
 });
 const viewerTitle = computed(
-    () => `Visor de Documento - ${selectedViewerRow.value?.numero ?? ''}`,
+    () => `Documento del expediente ${selectedViewerRow.value?.numero ?? ''}`,
 );
 
 const refetch = async (): Promise<void> => {
@@ -95,7 +95,7 @@ const handleCreateSuccess = (expediente: Expediente): void => {
     void router.push(`/expedientes/${expediente.id}`);
 };
 
-const handleUpdateExpediente = (expediente: Expediente): void => {
+const handleManageResolution = (expediente: Expediente): void => {
     void router.push({
         path: `/expedientes/${expediente.id}`,
         query: { editor: 'true' },
@@ -223,12 +223,20 @@ const closeViewerModal = (): void => {
 
 onMounted(() => {
     void refetch();
-    
+
+    const querySearch = Array.isArray(route.query.search)
+        ? route.query.search[0]
+        : route.query.search;
+
+    if (typeof querySearch === 'string') {
+        searchTerm.value = querySearch;
+    }
+
     // Handle query parameters for create/filter modes
     if (route.query.create === 'true') {
         showCreateModal.value = true;
         router.replace({ query: {} });
-    } else if (route.query.filter === 'finished') {
+    } else if (route.query.filter === 'finished' && !searchTerm.value) {
         // Filter for finished expedientes
         searchTerm.value = 'finalizado';
     }
@@ -251,164 +259,278 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="space-y-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-start space-x-4 sm:items-center">
-                <RouterLink
-                    to="/main"
-                    class="inline-flex min-h-12 items-center rounded-lg bg-blue-700 px-5 py-3 text-base font-semibold text-white shadow-md transition-colors hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                    <ArrowLeft class="mr-2 h-5 w-5" />
-                    Volver
-                </RouterLink>
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Expedientes</h1>
-                    <p class="mt-1 text-base text-gray-600">Consulta y administra los expedientes del sistema</p>
+    <div class="space-y-7 pb-2">
+        <section
+            aria-labelledby="expedientes-page-title"
+            class="overflow-hidden rounded-3xl border border-blue-800 bg-gradient-to-br from-blue-800 via-blue-700 to-cyan-700 shadow-xl"
+        >
+            <div class="p-6 lg:p-8">
+                <div class="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+                    <div class="flex items-start gap-4">
+                        <RouterLink
+                            to="/main"
+                            class="inline-flex min-h-12 shrink-0 items-center rounded-xl border border-white/30 bg-white/10 px-4 py-3 text-base font-bold text-white shadow-sm transition-colors hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-blue-700"
+                        >
+                            <ArrowLeft class="mr-2 h-5 w-5" aria-hidden="true" />
+                            Inicio
+                        </RouterLink>
+                        <div class="pt-0.5">
+                            <p class="text-sm font-bold uppercase tracking-[0.16em] text-cyan-100">
+                                Panel de trabajo
+                            </p>
+                            <h1 id="expedientes-page-title" class="mt-1 text-3xl font-extrabold text-white lg:text-4xl">
+                                Expedientes
+                            </h1>
+                            <p class="mt-2 max-w-2xl text-lg text-blue-50">
+                                Busque un caso, abra sus datos o continúe con sus resoluciones desde un solo lugar.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="inline-flex min-h-14 items-center justify-center rounded-xl bg-amber-400 px-6 py-3 text-lg font-extrabold text-slate-950 shadow-lg transition-colors hover:bg-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-blue-700"
+                        @click="showCreateModal = true"
+                    >
+                        <Plus class="mr-2 h-6 w-6" aria-hidden="true" />
+                        Crear nuevo expediente
+                    </button>
+                </div>
+
+                <div class="mt-7 grid gap-3 border-t border-white/20 pt-6 md:grid-cols-3">
+                    <div class="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 text-white">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-300 text-base font-extrabold text-slate-900">
+                            1
+                        </span>
+                        <div>
+                            <p class="font-bold">Busque</p>
+                            <p class="text-sm text-blue-100">Escriba un dato que recuerde.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 text-white">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan-300 text-base font-extrabold text-slate-900">
+                            2
+                        </span>
+                        <div>
+                            <p class="font-bold">Abra el expediente</p>
+                            <p class="text-sm text-blue-100">Revise los datos del caso.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 text-white">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-300 text-base font-extrabold text-slate-900">
+                            3
+                        </span>
+                        <div>
+                            <p class="font-bold">Gestione resoluciones</p>
+                            <p class="text-sm text-blue-100">Cree o continúe el siguiente documento.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <Button class="min-h-12 text-base" variant="primary" size="lg" @click="showCreateModal = true">
-                <template #icon>
-                    <Plus class="h-4 w-4" />
-                </template>
-                Nuevo Expediente
-            </Button>
-        </div>
+        </section>
 
-        <div class="rounded-2xl border-2 border-gray-300 bg-white p-6 shadow-md sm:p-8">
-            <div class="mb-4">
-                <label for="expediente-search" class="block text-xl font-bold text-gray-900">
-                    Buscar expedientes
-                </label>
-                <p id="expediente-search-help" class="mt-1 text-base text-gray-600">
-                    Escriba un número, materia, juzgado o nombre relacionado con el expediente.
+        <section
+            aria-labelledby="expediente-search-title"
+            class="rounded-3xl border-2 border-cyan-200 bg-white p-6 shadow-lg lg:p-8"
+        >
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div class="flex items-start gap-4">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-100 text-cyan-800">
+                        <Search class="h-7 w-7" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h2 id="expediente-search-title" class="text-2xl font-extrabold text-slate-900">
+                            Encuentre un expediente
+                        </h2>
+                        <p id="expediente-search-help" class="mt-1 text-base text-slate-600">
+                            Puede escribir el número, materia, juzgado, especialista o el nombre de una persona.
+                        </p>
+                    </div>
+                </div>
+                <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                    No necesita escribir el dato completo.
                 </p>
             </div>
-            <form class="flex flex-col gap-3 sm:flex-row" role="search" @submit.prevent="handleSearch">
+
+            <form class="mt-6 flex flex-col gap-3 xl:flex-row" role="search" @submit.prevent="handleSearch">
                 <div class="flex-1">
+                    <label for="expediente-search" class="sr-only">Dato del expediente a buscar</label>
                     <div class="relative">
-                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-                            <Search class="h-7 w-7 text-gray-500" />
+                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-5">
+                            <Search class="h-7 w-7 text-blue-700" aria-hidden="true" />
                         </div>
                         <input
                             id="expediente-search"
                             v-model="searchTerm"
                             type="text"
                             aria-describedby="expediente-search-help"
-                            placeholder="Ejemplo: 12345-2024 o materia civil"
-                            class="block min-h-14 w-full rounded-xl border-2 border-gray-400 bg-white py-3 pl-14 pr-4 text-lg leading-6 text-gray-900 shadow-sm placeholder-gray-500 focus:border-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200"
+                            autocomplete="off"
+                            placeholder="Ejemplo: 12345-2024, civil o Pérez"
+                            class="block min-h-16 w-full rounded-2xl border-2 border-slate-300 bg-white py-4 pl-16 pr-5 text-lg font-medium text-slate-900 shadow-sm placeholder:text-slate-500 focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100"
                         />
                     </div>
                 </div>
-                <Button class="min-h-14 text-base" type="submit" variant="outline" size="lg">Buscar</Button>
-                <Button
+                <button
+                    type="submit"
+                    class="inline-flex min-h-16 items-center justify-center rounded-2xl bg-blue-700 px-7 py-3 text-lg font-extrabold text-white shadow-md transition-colors hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-200 focus:ring-offset-2"
+                >
+                    <Search class="mr-2 h-5 w-5" aria-hidden="true" />
+                    Buscar ahora
+                </button>
+                <button
                     v-if="searchTerm"
-                    class="min-h-14 text-base"
                     type="button"
-                    variant="outline"
-                    size="lg"
+                    class="inline-flex min-h-16 items-center justify-center rounded-2xl border-2 border-slate-300 bg-white px-6 py-3 text-base font-bold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 focus:ring-offset-2"
                     @click="searchTerm = ''"
                 >
-                    Limpiar
-                </Button>
+                    Limpiar búsqueda
+                </button>
             </form>
-        </div>
+        </section>
 
-        <div v-if="!loading && expedientes" class="text-sm text-gray-600">
-            {{ filteredExpedientes.length }} expedientes encontrados
-        </div>
-
-        <Table
-            :columns="columns"
-            :rows="paginatedExpedientes"
-            :loading="loading"
-            fixed-layout
-            stack-on-mobile
-            empty-message="No se encontraron expedientes"
-            @row-click="handleRowClick"
-        >
-            <template #cell-numero="{ value }">
-                <span class="text-base font-semibold text-gray-900">{{ value }}</span>
-            </template>
-
-            <template #cell-materia="{ value }">
-                <span
-                    class="block max-w-[12rem] truncate text-base text-gray-800"
-                    :title="String(value || 'Sin registrar')"
-                >
-                    {{ value || 'Sin registrar' }}
-                </span>
-            </template>
-
-            <template #cell-estado="{ value }">
-                <span
-                    class="block max-w-[12rem] truncate text-base font-medium capitalize text-gray-800"
-                    :title="String(value || 'Sin estado')"
-                >
-                    {{ value || 'Sin estado' }}
-                </span>
-            </template>
-
-            <template #cell-acciones="{ row }">
-                <div class="grid min-w-0 grid-cols-1 gap-2 xl:grid-cols-3">
-                    <button
-                        type="button"
-                        class="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold leading-tight text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                        @click.stop="handleRowClick(row)"
-                    >
-                        <FolderOpen class="mr-2 h-5 w-5" aria-hidden="true" />
-                        Ver expediente
-                    </button>
-                    <button
-                        type="button"
-                        class="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold leading-tight text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="!row.archivo"
-                        :title="row.archivo ? 'Ver documento' : 'Este expediente no tiene un documento asociado'"
-                        @click.stop="handleViewClick(row)"
-                    >
-                        <Eye class="mr-2 h-5 w-5" aria-hidden="true" />
-                        Ver documento
-                    </button>
-                    <button
-                        type="button"
-                        class="inline-flex min-h-11 min-w-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold leading-tight text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                        title="Redactar la siguiente resolución"
-                        @click.stop="handleUpdateExpediente(row)"
-                    >
-                        <FilePenLine class="mr-2 h-5 w-5" aria-hidden="true" />
-                        Actualizar expediente
-                    </button>
+        <section aria-labelledby="expedientes-list-title" class="space-y-4">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                    <h2 id="expedientes-list-title" class="text-2xl font-extrabold text-slate-900">
+                        Resultados de expedientes
+                    </h2>
+                    <p class="mt-1 text-base text-slate-600">
+                        Use los botones de la derecha para realizar la acción que necesita.
+                    </p>
                 </div>
-            </template>
-        </Table>
-
-        <div
-            v-if="!loading && filteredExpedientes.length > 0"
-            class="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3"
-        >
-            <div class="text-sm text-gray-700">Página {{ currentPage }} de {{ totalPages }}</div>
-            <div class="flex space-x-2">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    :disabled="currentPage === 1"
-                    @click="currentPage = Math.max(1, currentPage - 1)"
+                <div
+                    v-if="!loading && expedientes"
+                    role="status"
+                    aria-live="polite"
+                    class="inline-flex items-center self-start rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-base font-bold text-emerald-900 lg:self-auto"
                 >
-                    Anterior
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    :disabled="currentPage >= totalPages"
-                    @click="currentPage = Math.min(totalPages, currentPage + 1)"
-                >
-                    Siguiente
-                </Button>
+                    {{
+                        filteredExpedientes.length === 1
+                            ? '1 expediente encontrado'
+                            : `${filteredExpedientes.length} expedientes encontrados`
+                    }}
+                </div>
             </div>
-        </div>
+
+            <div class="rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm text-blue-950">
+                <div class="flex items-center gap-3">
+                    <FolderOpen class="h-6 w-6 shrink-0 text-blue-700" aria-hidden="true" />
+                    <p>
+                        <span class="font-extrabold">Guía rápida:</span>
+                        <span class="ml-1">“Abrir expediente” muestra todos los datos; “Gestionar resolución” inicia o continúa el documento pendiente.</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-lg">
+                <Table
+                    :columns="columns"
+                    :rows="paginatedExpedientes"
+                    :loading="loading"
+                    fixed-layout
+                    stack-on-mobile
+                    empty-message="No se encontraron expedientes con esos datos. Pruebe con otra palabra o número."
+                    @row-click="handleRowClick"
+                >
+                    <template #cell-numero="{ value }">
+                        <span class="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-base font-extrabold text-blue-900">
+                            {{ value }}
+                        </span>
+                    </template>
+
+                    <template #cell-materia="{ value }">
+                        <span
+                            class="block max-w-[12rem] truncate text-base font-medium text-slate-800"
+                            :title="String(value || 'Sin registrar')"
+                        >
+                            {{ value || 'Sin registrar' }}
+                        </span>
+                    </template>
+
+                    <template #cell-estado="{ value }">
+                        <span
+                            class="inline-flex max-w-[12rem] truncate rounded-full bg-violet-100 px-3 py-1.5 text-base font-bold capitalize text-violet-900"
+                            :title="String(value || 'Sin estado')"
+                        >
+                            {{ value || 'Sin estado' }}
+                        </span>
+                    </template>
+
+                    <template #cell-acciones="{ row }">
+                        <div class="grid min-w-0 grid-cols-1 gap-2 2xl:grid-cols-3">
+                            <button
+                                type="button"
+                                class="inline-flex min-h-12 min-w-0 items-center justify-center rounded-xl bg-blue-700 px-3 py-3 text-sm font-extrabold leading-tight text-white shadow-sm transition-colors hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-200 focus:ring-offset-2"
+                                title="Abrir los datos y acciones de este expediente"
+                                @click.stop="handleRowClick(row)"
+                            >
+                                <FolderOpen class="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+                                Abrir expediente
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex min-h-12 min-w-0 items-center justify-center rounded-xl border-2 border-cyan-300 bg-cyan-50 px-3 py-3 text-sm font-extrabold leading-tight text-cyan-950 shadow-sm transition-colors hover:bg-cyan-100 focus:outline-none focus:ring-4 focus:ring-cyan-200 focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100"
+                                :disabled="!row.archivo"
+                                :title="row.archivo ? 'Abrir el documento asociado' : 'Este expediente todavía no tiene un documento asociado'"
+                                @click.stop="handleViewClick(row)"
+                            >
+                                <Eye class="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+                                {{ row.archivo ? 'Ver documento' : 'Sin documento' }}
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex min-h-12 min-w-0 items-center justify-center rounded-xl bg-amber-400 px-3 py-3 text-sm font-extrabold leading-tight text-slate-950 shadow-sm transition-colors hover:bg-amber-300 focus:outline-none focus:ring-4 focus:ring-amber-200 focus:ring-offset-2"
+                                title="Crear o continuar la resolución de este expediente"
+                                @click.stop="handleManageResolution(row)"
+                            >
+                                <FilePenLine class="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+                                Gestionar resolución
+                            </button>
+                        </div>
+                    </template>
+                </Table>
+            </div>
+
+            <div
+                v-if="!loading && filteredExpedientes.length > 0"
+                class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+            >
+                <div class="text-base font-medium text-slate-700">
+                    Página <span class="font-extrabold text-slate-950">{{ currentPage }}</span> de
+                    <span class="font-extrabold text-slate-950">{{ totalPages }}</span>
+                </div>
+                <div class="flex gap-3">
+                    <Button
+                        class="min-h-12 px-5 text-base font-bold"
+                        variant="outline"
+                        size="md"
+                        :disabled="currentPage === 1"
+                        @click="currentPage = Math.max(1, currentPage - 1)"
+                    >
+                        <template #icon>
+                            <ArrowLeft class="h-5 w-5" />
+                        </template>
+                        Anterior
+                    </Button>
+                    <Button
+                        class="min-h-12 px-5 text-base font-bold"
+                        variant="outline"
+                        size="md"
+                        :disabled="currentPage >= totalPages"
+                        @click="currentPage = Math.min(totalPages, currentPage + 1)"
+                    >
+                        <template #icon>
+                            <ArrowLeft class="h-5 w-5 rotate-180" />
+                        </template>
+                        Siguiente
+                    </Button>
+                </div>
+            </div>
+        </section>
 
         <Modal
             :open="showCreateModal"
-            title="Crear Nuevo Expediente"
+            title="Crear un nuevo expediente"
             size="xl"
             @close="showCreateModal = false"
         >
@@ -419,13 +541,16 @@ onBeforeUnmount(() => {
             <div class="flex h-[85vh] flex-col">
                 <div
                     v-if="viewerState !== 'loading' && viewerBlobUrl"
-                    class="flex items-center justify-between border-b bg-gray-50 px-4 py-3"
+                    class="flex items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4"
                 >
-                    <div class="text-sm text-gray-600">{{ viewerFilename }}</div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Documento asociado</p>
+                        <p class="truncate text-base font-semibold text-slate-800">{{ viewerFilename }}</p>
+                    </div>
                     <a
                         :href="viewerBlobUrl"
                         :download="viewerFilename"
-                        class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-700"
+                        class="inline-flex min-h-12 shrink-0 items-center rounded-xl bg-blue-700 px-5 py-3 text-base font-bold text-white shadow-sm transition-colors hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-200 focus:ring-offset-2"
                     >
                         <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -435,7 +560,7 @@ onBeforeUnmount(() => {
                                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                             />
                         </svg>
-                        Descargar
+                        Descargar documento
                     </a>
                 </div>
 
@@ -445,7 +570,8 @@ onBeforeUnmount(() => {
                             <div
                                 class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"
                             ></div>
-                            <p class="text-gray-600">Cargando documento...</p>
+                            <p class="font-semibold text-slate-700">Preparando documento...</p>
+                            <p class="mt-1 text-sm text-slate-500">Esto puede tomar unos segundos.</p>
                         </div>
                     </div>
 
@@ -474,12 +600,12 @@ onBeforeUnmount(() => {
                                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                                 />
                             </svg>
-                            <p class="mb-4 font-medium text-gray-700">No se pudo mostrar la vista previa</p>
-                            <p class="mb-4 text-sm text-gray-500">{{ viewerMessage }}</p>
+                            <p class="mb-2 text-lg font-bold text-slate-800">No se pudo mostrar la vista previa</p>
+                            <p class="mb-5 text-sm text-slate-600">{{ viewerMessage }}</p>
                             <a
                                 :href="viewerBlobUrl"
                                 :download="viewerFilename"
-                                class="inline-flex items-center rounded-md bg-blue-600 px-6 py-3 text-white transition-colors hover:bg-blue-700"
+                                class="inline-flex min-h-12 items-center rounded-xl bg-blue-700 px-6 py-3 font-bold text-white transition-colors hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-200 focus:ring-offset-2"
                             >
                                 Descargar archivo original
                             </a>
@@ -501,7 +627,7 @@ onBeforeUnmount(() => {
                                     d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                                 />
                             </svg>
-                            <p class="text-gray-700">{{ viewerMessage }}</p>
+                            <p class="text-base font-semibold text-slate-700">{{ viewerMessage }}</p>
                         </div>
                     </div>
                 </div>

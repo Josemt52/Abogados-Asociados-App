@@ -503,375 +503,720 @@ watch(
 
 <template>
     <div v-if="expedienteLoading" class="flex h-64 items-center justify-center">
-        <div class="animate-pulse text-gray-500">Cargando expediente...</div>
+        <div class="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-4 text-indigo-800">
+            <Clock class="h-5 w-5 animate-pulse" />
+            <span class="font-medium">Estamos preparando el expediente...</span>
+        </div>
     </div>
 
-    <div v-else-if="!expediente" class="py-12 text-center">
-        <Scale class="mx-auto mb-4 h-12 w-12 text-gray-400" />
-        <p class="text-gray-500">Expediente no encontrado</p>
-        <Button variant="outline" class="mt-4" @click="router.push('/expedientes')">
-            Volver a expedientes
-        </Button>
+    <div v-else-if="!expediente" class="py-16 text-center">
+        <div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+            <Scale class="mx-auto mb-4 h-12 w-12 text-slate-400" />
+            <h1 class="text-xl font-bold text-slate-900">No encontramos este expediente</h1>
+            <p class="mt-2 text-sm text-slate-600">
+                Puede volver a la lista para buscarlo nuevamente.
+            </p>
+            <Button variant="outline" size="lg" class="mt-6" @click="router.push('/expedientes')">
+                <template #icon>
+                    <ArrowLeft class="h-5 w-5" />
+                </template>
+                Volver a expedientes
+            </Button>
+        </div>
     </div>
 
-    <div v-else class="space-y-6">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <RouterLink
-                    to="/expedientes"
-                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-                >
-                    <ArrowLeft class="mr-2 h-4 w-4" />
-                    Volver a expedientes
-                </RouterLink>
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900">Expediente #{{ expediente.numero }}</h1>
-                    <p class="text-gray-600">{{ expediente.materia }}</p>
+    <div v-else class="mx-auto max-w-[1500px] space-y-6 pb-10">
+        <header class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex flex-col gap-5 px-6 py-6 xl:flex-row xl:items-center xl:justify-between">
+                <div class="flex min-w-0 items-start gap-4">
+                    <RouterLink
+                        to="/expedientes"
+                        class="inline-flex shrink-0 items-center rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                        <ArrowLeft class="mr-2 h-5 w-5" />
+                        Volver a expedientes
+                    </RouterLink>
+                    <div class="min-w-0 pt-1">
+                        <p class="text-xs font-bold uppercase tracking-[0.16em] text-indigo-700">Vista guiada</p>
+                        <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-950">
+                            Expediente N.º {{ expediente.numero }}
+                        </h1>
+                        <p class="mt-1 text-base text-slate-600">{{ expediente.materia }}</p>
+                    </div>
+                </div>
+
+                <Button variant="outline" size="lg" class="shrink-0" @click="showEditModal = true">
+                    <template #icon>
+                        <Edit class="h-5 w-5" />
+                    </template>
+                    Corregir datos del expediente
+                </Button>
+            </div>
+
+            <div class="grid border-t border-slate-200 bg-slate-50 md:grid-cols-3">
+                <div class="flex items-center gap-3 px-6 py-4 md:border-r md:border-slate-200">
+                    <div class="rounded-full bg-indigo-100 p-2 text-indigo-700">
+                        <Clock class="h-5 w-5" />
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Estado actual</p>
+                        <p class="font-bold text-slate-900">{{ expediente.estado || 'En proceso' }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 px-6 py-4 md:border-r md:border-slate-200">
+                    <div class="rounded-full bg-emerald-100 p-2 text-emerald-700">
+                        <CheckCircle2 class="h-5 w-5" />
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Última resolución</p>
+                        <p class="font-bold text-slate-900">{{ lastResolutionLabel }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 px-6 py-4">
+                    <div class="rounded-full bg-amber-100 p-2 text-amber-700">
+                        <FileIcon class="h-5 w-5" />
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Última actualización</p>
+                        <p class="font-bold text-slate-900">{{ formattedUpdatedAt }}</p>
+                    </div>
                 </div>
             </div>
-            <div class="flex space-x-3">
-                <Button variant="outline" @click="showEditModal = true">
-                    <template #icon>
-                        <Edit class="h-4 w-4" />
-                    </template>
-                    Editar
-                </Button>
-                <Button
-                    v-if="resolutionHistoryReady && sortedResoluciones.length === 0"
-                    variant="outline"
-                    @click="showUploadModal = true"
-                >
-                    <template #icon>
-                        <Upload class="h-4 w-4" />
-                    </template>
-                    {{ expediente.archivo ? 'Reemplazar documento inicial' : 'Subir documento inicial' }}
-                </Button>
-            </div>
-        </div>
+        </header>
 
-        <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <div class="flex items-center space-x-2">
-                <Clock class="h-5 w-5 text-blue-600" />
-                <span class="text-sm font-medium text-blue-900">
-                    Estado: {{ expediente.estado || 'En proceso' }}
-                </span>
-                <span class="text-sm text-blue-700">
-                    • Última actualización: {{ formattedUpdatedAt }}
-                </span>
-                <span class="text-sm font-medium text-blue-900">
-                    • Última resolución: {{ lastResolutionLabel }}
-                </span>
+        <section aria-labelledby="workflow-heading" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div class="mb-5 flex items-center gap-3">
+                <div class="rounded-xl bg-violet-100 p-2 text-violet-700">
+                    <Scale class="h-6 w-6" />
+                </div>
+                <div>
+                    <h2 id="workflow-heading" class="text-xl font-bold text-slate-950">Guía rápida del expediente</h2>
+                    <p class="text-sm text-slate-600">
+                        Cada grupo reúne una tarea concreta. El sistema le indica cuál conviene hacer ahora.
+                    </p>
+                </div>
             </div>
-        </div>
 
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div class="space-y-6 lg:col-span-2">
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h2 class="mb-4 flex items-center text-lg font-semibold text-gray-900">
-                        <Scale class="mr-2 h-5 w-5 text-blue-600" />
-                        Información del Expediente
-                    </h2>
-                    <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Número</dt>
-                            <dd class="mt-1 text-sm font-medium text-gray-900">{{ expediente.numero }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Materia</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ expediente.materia }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Juzgado</dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ expediente.juzgado }}</dd>
-                        </div>
-                        <div>
-                            <dt class="flex items-center text-sm font-medium text-gray-500">
-                                <User class="mr-1 h-4 w-4" />
-                                Especialista
-                            </dt>
-                            <dd class="mt-1 text-sm text-gray-900">{{ expediente.especialista }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Terceros</dt>
-                            <dd class="mt-1 whitespace-pre-line text-sm text-gray-900">{{ expediente.tercero || 'N/A' }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Demandados</dt>
-                            <dd class="mt-1 whitespace-pre-line text-sm text-gray-900">{{ expediente.demandado || 'N/A' }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Demandantes</dt>
-                            <dd class="mt-1 whitespace-pre-line text-sm text-gray-900">{{ expediente.demandante || 'N/A' }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Archivo</dt>
-                            <dd class="mt-1">
-                                <span
-                                    v-if="expediente.archivo"
-                                    class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800"
-                                >
-                                    ✓ {{ expediente.nombre_archivo || 'Disponible' }}
-                                </span>
-                                <span
-                                    v-else
-                                    class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800"
-                                >
-                                    Sin archivo
-                                </span>
-                            </dd>
-                        </div>
-                    </dl>
+            <div class="grid gap-3 md:grid-cols-4">
+                <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div class="flex items-center justify-between">
+                        <span class="rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-black text-white">01</span>
+                        <CheckCircle2 class="h-5 w-5 text-emerald-700" />
+                    </div>
+                    <p class="mt-3 font-bold text-emerald-950">Datos del expediente</p>
+                    <p class="mt-1 text-sm text-emerald-800">Registrados y disponibles para revisar.</p>
                 </div>
 
                 <div
-                    v-if="expediente.estado"
-                    class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+                    class="rounded-xl border p-4"
+                    :class="expediente.archivo ? 'border-cyan-200 bg-cyan-50' : 'border-amber-200 bg-amber-50'"
                 >
-                    <h2 class="mb-4 text-lg font-semibold text-gray-900">Estado Actual</h2>
-                    <div class="prose max-w-none rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
-                        {{ expediente.estado }}
+                    <div class="flex items-center justify-between">
+                        <span
+                            class="rounded-full px-2.5 py-1 text-xs font-black text-white"
+                            :class="expediente.archivo ? 'bg-cyan-600' : 'bg-amber-500'"
+                        >
+                            02
+                        </span>
+                        <FileIcon :class="expediente.archivo ? 'text-cyan-700' : 'text-amber-700'" class="h-5 w-5" />
+                    </div>
+                    <p class="mt-3 font-bold text-slate-950">Documento inicial</p>
+                    <p class="mt-1 text-sm text-slate-700">
+                        {{ expediente.archivo ? 'Archivo listo para usar.' : 'Falta cargar el archivo base.' }}
+                    </p>
+                </div>
+
+                <div
+                    class="rounded-xl border p-4"
+                    :class="pendingResolution ? 'border-amber-200 bg-amber-50' : 'border-violet-200 bg-violet-50'"
+                >
+                    <div class="flex items-center justify-between">
+                        <span
+                            class="rounded-full px-2.5 py-1 text-xs font-black text-white"
+                            :class="pendingResolution ? 'bg-amber-500' : 'bg-violet-600'"
+                        >
+                            03
+                        </span>
+                        <Clock v-if="pendingResolution" class="h-5 w-5 text-amber-700" />
+                        <FilePlus2 v-else class="h-5 w-5 text-violet-700" />
+                    </div>
+                    <p class="mt-3 font-bold text-slate-950">Resoluciones</p>
+                    <p class="mt-1 text-sm text-slate-700">
+                        <template v-if="resolucionesLoading">Estamos revisando el historial.</template>
+                        <template v-else-if="resolucionesError">El historial necesita reintentarse.</template>
+                        <template v-else-if="pendingResolution">
+                            La resolución {{ pendingResolution.numero }} está pendiente.
+                        </template>
+                        <template v-else-if="expediente.ultima_resolucion == null">
+                            Falta confirmar la numeración inicial.
+                        </template>
+                        <template v-else>Lista para la próxima resolución.</template>
+                    </p>
+                </div>
+
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                    <div class="flex items-center justify-between">
+                        <span class="rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-black text-white">04</span>
+                        <Download class="h-5 w-5 text-indigo-700" />
+                    </div>
+                    <p class="mt-3 font-bold text-indigo-950">Descargas y cierre</p>
+                    <p class="mt-1 text-sm text-indigo-800">
+                        Genere el PDF o descargue los documentos cuando los necesite.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section aria-live="polite" class="overflow-hidden rounded-2xl border border-indigo-300 bg-indigo-50 shadow-sm">
+            <div class="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex items-start gap-4">
+                    <div class="rounded-xl bg-indigo-600 p-3 text-white shadow-sm">
+                        <FilePlus2 class="h-7 w-7" />
+                    </div>
+                    <div>
+                        <p class="text-xs font-black uppercase tracking-[0.16em] text-indigo-700">Siguiente paso recomendado</p>
+                        <h2 class="mt-1 text-2xl font-bold text-indigo-950">
+                            <template v-if="!resolutionHistoryReady">Espere mientras comprobamos las resoluciones</template>
+                            <template v-else-if="expediente.ultima_resolucion == null">
+                                Confirme cuál fue la última resolución
+                            </template>
+                            <template v-else-if="!expediente.archivo && sortedResoluciones.length === 0">
+                                Suba el documento inicial del expediente
+                            </template>
+                            <template v-else-if="pendingResolution">
+                                Termine la Resolución N.º {{ pendingResolution.numero }}
+                            </template>
+                            <template v-else>Prepare la Resolución N.º {{ nextResolutionNumber }}</template>
+                        </h2>
+                        <p class="mt-1 max-w-3xl text-sm text-indigo-800">
+                            <template v-if="!resolutionHistoryReady">
+                                No cierre esta pantalla: habilitaremos las acciones apenas el historial esté listo.
+                            </template>
+                            <template v-else-if="expediente.ultima_resolucion == null">
+                                Verifique el número para que las próximas resoluciones mantengan el orden correcto.
+                            </template>
+                            <template v-else-if="!expediente.archivo && sortedResoluciones.length === 0">
+                                Cargue el documento Word, PDF o DOC que servirá como base para este expediente.
+                            </template>
+                            <template v-else-if="pendingResolution">
+                                Puede continuar editándola aquí o subir el Word que ya terminó fuera del sistema.
+                            </template>
+                            <template v-else>
+                                Abra el editor para redactarla dentro del sistema, o descargue una plantilla Word.
+                            </template>
+                        </p>
                     </div>
                 </div>
 
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <div class="mb-4 flex items-center justify-between">
-                        <div>
-                            <h2 class="text-lg font-semibold text-gray-900">Historial de resoluciones</h2>
-                            <p class="text-sm text-gray-500">
-                                Documentos incorporados y resoluciones pendientes de completar.
-                            </p>
+                <div class="shrink-0">
+                    <Button
+                        v-if="resolutionHistoryReady && expediente.ultima_resolucion == null"
+                        variant="primary"
+                        size="lg"
+                        class="w-full min-w-[280px] shadow-md lg:w-auto"
+                        @click="showInitialResolutionModal = true"
+                    >
+                        <template #icon>
+                            <CheckCircle2 class="h-5 w-5" />
+                        </template>
+                        Confirmar última resolución
+                    </Button>
+                    <Button
+                        v-else-if="resolutionHistoryReady && !expediente.archivo && sortedResoluciones.length === 0"
+                        variant="primary"
+                        size="lg"
+                        class="w-full min-w-[280px] shadow-md lg:w-auto"
+                        @click="showUploadModal = true"
+                    >
+                        <template #icon>
+                            <Upload class="h-5 w-5" />
+                        </template>
+                        Subir documento inicial
+                    </Button>
+                    <Button
+                        v-else-if="resolutionHistoryReady"
+                        variant="primary"
+                        size="lg"
+                        :loading="openingResolutionEditor"
+                        :disabled="generatingResolution"
+                        class="w-full min-w-[280px] shadow-md lg:w-auto"
+                        @click="handleOpenResolutionEditor"
+                    >
+                        <template #icon>
+                            <Edit class="h-5 w-5" />
+                        </template>
+                        {{ pendingResolution ? `Continuar Resolución ${pendingResolution.numero}` : `Abrir Resolución ${nextResolutionNumber}` }}
+                    </Button>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <main class="space-y-6 xl:col-span-2">
+                <section aria-labelledby="step-data-heading" class="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+                    <div class="flex flex-col gap-4 border-b border-emerald-200 bg-emerald-50 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-sm font-black text-white">1</span>
+                            <div>
+                                <h2 id="step-data-heading" class="text-xl font-bold text-emerald-950">Paso 1. Revise los datos</h2>
+                                <p class="text-sm text-emerald-800">Compruebe que esta información identifica correctamente el expediente.</p>
+                            </div>
+                        </div>
+                        <Button variant="outline" size="lg" class="shrink-0" @click="showEditModal = true">
+                            <template #icon>
+                                <Edit class="h-5 w-5" />
+                            </template>
+                            Editar datos
+                        </Button>
+                    </div>
+
+                    <div class="p-6">
+                        <dl class="grid gap-4 md:grid-cols-2">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Número de expediente</dt>
+                                <dd class="mt-2 text-lg font-bold text-slate-950">{{ expediente.numero }}</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Materia</dt>
+                                <dd class="mt-2 text-base font-semibold text-slate-900">{{ expediente.materia }}</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Juzgado</dt>
+                                <dd class="mt-2 text-base font-semibold text-slate-900">{{ expediente.juzgado }}</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <dt class="flex items-center text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    <User class="mr-1.5 h-4 w-4" />
+                                    Especialista
+                                </dt>
+                                <dd class="mt-2 text-base font-semibold text-slate-900">{{ expediente.especialista }}</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Terceros</dt>
+                                <dd class="mt-2 whitespace-pre-line text-base text-slate-900">{{ expediente.tercero || 'No registrado' }}</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Demandados</dt>
+                                <dd class="mt-2 whitespace-pre-line text-base text-slate-900">{{ expediente.demandado || 'No registrado' }}</dd>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                                <dt class="text-xs font-bold uppercase tracking-wide text-slate-500">Demandantes</dt>
+                                <dd class="mt-2 whitespace-pre-line text-base text-slate-900">{{ expediente.demandante || 'No registrado' }}</dd>
+                            </div>
+                        </dl>
+
+                        <div class="mt-5 flex flex-col gap-4 rounded-xl border border-indigo-200 bg-indigo-50 p-5 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                                <p class="text-sm font-bold text-indigo-950">Estado o nota actual</p>
+                                <p class="mt-1 whitespace-pre-line text-sm text-indigo-900">
+                                    {{ expediente.estado || 'Aún no se ha registrado un estado para este expediente.' }}
+                                </p>
+                            </div>
+                            <Button
+                                variant="outline"
+                                class="shrink-0"
+                                @click="statusText = expediente.estado || ''; showUpdateStatusModal = true"
+                            >
+                                <template #icon>
+                                    <Edit class="h-4 w-4" />
+                                </template>
+                                Actualizar estado
+                            </Button>
+                        </div>
+                    </div>
+                </section>
+
+                <section aria-labelledby="step-document-heading" class="overflow-hidden rounded-2xl border border-cyan-200 bg-white shadow-sm">
+                    <div class="flex flex-col gap-4 border-b border-cyan-200 bg-cyan-50 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-cyan-600 text-sm font-black text-white">2</span>
+                            <div>
+                                <h2 id="step-document-heading" class="text-xl font-bold text-cyan-950">Paso 2. Documento inicial</h2>
+                                <p class="text-sm text-cyan-800">Es el archivo base que acompaña este expediente.</p>
+                            </div>
                         </div>
                         <span
-                            class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800"
+                            class="inline-flex w-fit items-center rounded-full px-3 py-1.5 text-sm font-bold"
+                            :class="expediente.archivo ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'"
                         >
-                            Última: {{ lastResolutionLabel }}
+                            <CheckCircle2 v-if="expediente.archivo" class="mr-1.5 h-4 w-4" />
+                            <Clock v-else class="mr-1.5 h-4 w-4" />
+                            {{ expediente.archivo ? 'Archivo disponible' : 'Archivo pendiente' }}
                         </span>
                     </div>
 
-                    <div
-                        v-if="resolucionesLoading"
-                        class="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500"
-                    >
-                        Cargando historial de resoluciones...
-                    </div>
-
-                    <div
-                        v-else-if="resolucionesError"
-                        class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center"
-                    >
-                        <p class="font-medium text-red-800">No se pudo cargar el historial de resoluciones.</p>
-                        <p class="mt-1 text-sm text-red-700">{{ resolucionesError }}</p>
-                        <Button variant="outline" size="sm" class="mt-4" @click="refetch">
-                            Reintentar
-                        </Button>
-                    </div>
-
-                    <div v-else-if="sortedResoluciones.length" class="divide-y divide-gray-200">
+                    <div class="p-6">
                         <div
-                            v-for="resolucion in sortedResoluciones"
-                            :key="resolucion.id"
-                            class="flex items-center justify-between py-4"
+                            class="flex flex-col gap-5 rounded-xl border p-5 lg:flex-row lg:items-center lg:justify-between"
+                            :class="expediente.archivo ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'"
                         >
-                            <div class="flex items-center space-x-3">
+                            <div class="flex items-start gap-3">
                                 <div
-                                    class="rounded-full p-2"
-                                    :class="
-                                        resolucion.estado === 'completada'
-                                            ? 'bg-green-100 text-green-700'
-                                            : resolucion.estado === 'base'
-                                              ? 'bg-blue-100 text-blue-700'
-                                              : 'bg-amber-100 text-amber-700'
-                                    "
+                                    class="rounded-xl p-3"
+                                    :class="expediente.archivo ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'"
                                 >
-                                    <CheckCircle2
-                                        v-if="resolucion.estado === 'completada'"
-                                        class="h-5 w-5"
-                                    />
-                                    <FileIcon v-else-if="resolucion.estado === 'base'" class="h-5 w-5" />
-                                    <Clock v-else class="h-5 w-5" />
+                                    <FileIcon class="h-6 w-6" />
                                 </div>
                                 <div>
-                                    <p class="font-medium text-gray-900">
-                                        {{
-                                            resolucion.estado === 'base' && resolucion.numero === 0
-                                                ? 'Documento base (sin resoluciones)'
-                                                : `Resolución N.º ${resolucion.numero}`
-                                        }}
+                                    <p class="text-base font-bold text-slate-950">
+                                        {{ expediente.archivo ? 'Documento inicial cargado' : 'Todavía no hay documento inicial' }}
                                     </p>
-                                    <p class="text-sm text-gray-500">
-                                        {{
-                                            resolucion.estado === 'completada'
-                                                ? resolucion.nombre_archivo || 'Documento incorporado'
-                                                : resolucion.estado === 'base'
-                                                  ? 'Documento original usado como base del expediente'
-                                                  : 'Pendiente de editar o subir el Word terminado'
-                                        }}
-                                        •
-                                        {{
-                                            formatResolutionDate(
-                                                resolucion.completada_at || resolucion.created_at,
-                                            )
-                                        }}
+                                    <p class="mt-1 text-sm text-slate-700">
+                                        <template v-if="expediente.archivo">
+                                            {{ expediente.nombre_archivo || 'Archivo disponible para el expediente.' }}
+                                        </template>
+                                        <template v-else>
+                                            Cargue el archivo para contar con una base documental clara.
+                                        </template>
                                     </p>
                                 </div>
                             </div>
-                            <div class="flex flex-wrap items-center justify-end gap-2">
-                                <Button
-                                    v-if="resolucion.estado === 'pendiente'"
-                                    variant="primary"
-                                    size="sm"
-                                    :loading="openingResolutionEditor"
-                                    :disabled="generatingResolution"
-                                    @click="handleOpenResolutionEditor"
-                                >
-                                    <template #icon>
-                                        <Edit class="h-4 w-4" />
-                                    </template>
-                                    Editar en línea
-                                </Button>
-                                <Button
-                                    v-if="resolucion.estado === 'pendiente'"
-                                    variant="outline"
-                                    size="sm"
-                                    :loading="generatingResolution"
-                                    :disabled="openingResolutionEditor"
-                                    @click="handleDownloadResolutionTemplate"
-                                >
-                                    <template #icon>
-                                        <Download class="h-4 w-4" />
-                                    </template>
-                                    Descargar Word
-                                </Button>
-                                <Button
-                                    v-else-if="resolucion.nombre_archivo"
-                                    variant="outline"
-                                    size="sm"
-                                    :loading="downloadingResolutionId === resolucion.id"
-                                    @click="handleDownloadResolution(resolucion)"
-                                >
-                                    <template #icon>
-                                        <Download class="h-4 w-4" />
-                                    </template>
-                                    Descargar
-                                </Button>
-                                <Button
-                                    v-if="resolucion.estado === 'pendiente'"
-                                    variant="outline"
-                                    size="sm"
-                                    @click="openPendingResolution(resolucion)"
-                                >
-                                    Subir documento
-                                </Button>
+
+                            <Button
+                                v-if="resolutionHistoryReady && sortedResoluciones.length === 0"
+                                variant="primary"
+                                size="lg"
+                                class="shrink-0"
+                                @click="showUploadModal = true"
+                            >
+                                <template #icon>
+                                    <Upload class="h-5 w-5" />
+                                </template>
+                                {{ expediente.archivo ? 'Reemplazar documento inicial' : 'Subir documento inicial' }}
+                            </Button>
+                        </div>
+
+                        <p
+                            v-if="resolutionHistoryReady && sortedResoluciones.length === 0"
+                            class="mt-3 text-sm text-slate-600"
+                        >
+                            Puede cambiar este documento antes de registrar resoluciones individuales.
+                        </p>
+                        <p v-else-if="resolucionesLoading" class="mt-3 text-sm text-slate-600">
+                            Estamos comprobando si el documento puede actualizarse.
+                        </p>
+                        <p v-else-if="resolucionesError" class="mt-3 text-sm text-red-700">
+                            Necesitamos recuperar el historial antes de modificar el documento inicial.
+                        </p>
+                    </div>
+                </section>
+
+                <section aria-labelledby="step-resolution-heading" class="overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm">
+                    <div class="flex flex-col gap-4 border-b border-violet-200 bg-violet-50 px-6 py-5">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-sm font-black text-white">3</span>
+                                <div>
+                                    <h2 id="step-resolution-heading" class="text-xl font-bold text-violet-950">Paso 3. Trabaje las resoluciones</h2>
+                                    <p class="text-sm text-violet-800">Cree, continúe o incorpore una resolución sin perder el orden.</p>
+                                </div>
+                            </div>
+                            <span class="inline-flex w-fit rounded-full bg-white px-3 py-1.5 text-sm font-bold text-violet-800 shadow-sm ring-1 ring-violet-200">
+                                Última resolución: {{ lastResolutionLabel }}
+                            </span>
+                        </div>
+
+                        <div class="flex flex-wrap gap-3">
+                            <Button
+                                variant="primary"
+                                size="lg"
+                                :loading="openingResolutionEditor"
+                                :disabled="!resolutionHistoryReady || generatingResolution"
+                                @click="handleOpenResolutionEditor"
+                            >
+                                <template #icon>
+                                    <Edit class="h-5 w-5" />
+                                </template>
+                                <template v-if="resolucionesLoading">Cargando resoluciones...</template>
+                                <template v-else-if="resolucionesError">Historial no disponible</template>
+                                <template v-else-if="pendingResolution">
+                                    Continuar Resolución N.º {{ pendingResolution.numero }}
+                                </template>
+                                <template v-else-if="expediente.ultima_resolucion == null">
+                                    Confirmar numeración inicial
+                                </template>
+                                <template v-else>
+                                    Redactar Resolución N.º {{ nextResolutionNumber }}
+                                </template>
+                            </Button>
+
+                            <Button
+                                v-if="resolutionHistoryReady && expediente.ultima_resolucion != null"
+                                variant="outline"
+                                size="lg"
+                                :loading="generatingResolution"
+                                :disabled="openingResolutionEditor"
+                                @click="handleDownloadResolutionTemplate"
+                            >
+                                <template #icon>
+                                    <Download class="h-5 w-5" />
+                                </template>
+                                Descargar Word de la Resolución N.º {{ pendingResolution?.numero ?? nextResolutionNumber }}
+                            </Button>
+
+                            <Button
+                                v-if="pendingResolution"
+                                variant="outline"
+                                size="lg"
+                                :disabled="openingResolutionEditor || generatingResolution"
+                                @click="openPendingResolution(pendingResolution)"
+                            >
+                                <template #icon>
+                                    <Upload class="h-5 w-5" />
+                                </template>
+                                Subir Word terminado
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div class="p-6">
+                        <div class="mb-4 flex flex-col gap-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-700 lg:flex-row lg:items-center lg:justify-between">
+                            <p>
+                                <strong class="text-slate-950">Cómo continuar:</strong>
+                                use “Redactar” para trabajar aquí, o descargue el Word para editarlo fuera y súbalo al terminar.
+                            </p>
+                            <span class="shrink-0 font-bold text-slate-900">Historial de resoluciones</span>
+                        </div>
+
+                        <div
+                            v-if="resolucionesLoading"
+                            class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm text-slate-600"
+                        >
+                            <Clock class="mx-auto mb-3 h-6 w-6 animate-pulse text-violet-600" />
+                            Cargando el historial de resoluciones...
+                        </div>
+
+                        <div
+                            v-else-if="resolucionesError"
+                            class="rounded-xl border border-red-200 bg-red-50 px-5 py-7 text-center"
+                        >
+                            <p class="font-bold text-red-900">No pudimos cargar el historial de resoluciones.</p>
+                            <p class="mt-1 text-sm text-red-800">{{ resolucionesError }}</p>
+                            <Button variant="outline" size="lg" class="mt-5" @click="refetch">
+                                <template #icon>
+                                    <Clock class="h-5 w-5" />
+                                </template>
+                                Intentar nuevamente
+                            </Button>
+                        </div>
+
+                        <div v-else-if="sortedResoluciones.length" class="space-y-3">
+                            <article
+                                v-for="resolucion in sortedResoluciones"
+                                :key="resolucion.id"
+                                class="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 lg:flex-row lg:items-center lg:justify-between"
+                            >
+                                <div class="flex items-start gap-4">
+                                    <div
+                                        class="rounded-xl p-3"
+                                        :class="
+                                            resolucion.estado === 'completada'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : resolucion.estado === 'base'
+                                                  ? 'bg-cyan-100 text-cyan-700'
+                                                  : 'bg-amber-100 text-amber-700'
+                                        "
+                                    >
+                                        <CheckCircle2 v-if="resolucion.estado === 'completada'" class="h-6 w-6" />
+                                        <FileIcon v-else-if="resolucion.estado === 'base'" class="h-6 w-6" />
+                                        <Clock v-else class="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <h3 class="text-lg font-bold text-slate-950">
+                                                {{
+                                                    resolucion.estado === 'base' && resolucion.numero === 0
+                                                        ? 'Documento base (sin resoluciones)'
+                                                        : `Resolución N.º ${resolucion.numero}`
+                                                }}
+                                            </h3>
+                                            <span
+                                                class="rounded-full px-2.5 py-1 text-xs font-bold"
+                                                :class="
+                                                    resolucion.estado === 'completada'
+                                                        ? 'bg-emerald-100 text-emerald-800'
+                                                        : resolucion.estado === 'base'
+                                                          ? 'bg-cyan-100 text-cyan-800'
+                                                          : 'bg-amber-100 text-amber-800'
+                                                "
+                                            >
+                                                {{
+                                                    resolucion.estado === 'completada'
+                                                        ? 'Completada'
+                                                        : resolucion.estado === 'base'
+                                                          ? 'Documento base'
+                                                          : 'Pendiente'
+                                                }}
+                                            </span>
+                                        </div>
+                                        <p class="mt-1 text-sm text-slate-600">
+                                            {{
+                                                resolucion.estado === 'completada'
+                                                    ? resolucion.nombre_archivo || 'Documento incorporado'
+                                                    : resolucion.estado === 'base'
+                                                      ? 'Documento original usado como base del expediente'
+                                                      : 'Falta editar o subir el Word terminado'
+                                            }}
+                                        </p>
+                                        <p class="mt-1 text-xs font-medium text-slate-500">
+                                            Fecha: {{ formatResolutionDate(resolucion.completada_at || resolucion.created_at) }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+                                    <Button
+                                        v-if="resolucion.estado === 'pendiente'"
+                                        variant="primary"
+                                        :loading="openingResolutionEditor"
+                                        :disabled="generatingResolution"
+                                        @click="handleOpenResolutionEditor"
+                                    >
+                                        <template #icon>
+                                            <Edit class="h-4 w-4" />
+                                        </template>
+                                        Abrir editor
+                                    </Button>
+                                    <Button
+                                        v-if="resolucion.estado === 'pendiente'"
+                                        variant="outline"
+                                        :loading="generatingResolution"
+                                        :disabled="openingResolutionEditor"
+                                        @click="handleDownloadResolutionTemplate"
+                                    >
+                                        <template #icon>
+                                            <Download class="h-4 w-4" />
+                                        </template>
+                                        Descargar Word
+                                    </Button>
+                                    <Button
+                                        v-else-if="resolucion.nombre_archivo"
+                                        variant="outline"
+                                        :loading="downloadingResolutionId === resolucion.id"
+                                        @click="handleDownloadResolution(resolucion)"
+                                    >
+                                        <template #icon>
+                                            <Download class="h-4 w-4" />
+                                        </template>
+                                        Descargar resolución
+                                    </Button>
+                                    <Button
+                                        v-if="resolucion.estado === 'pendiente'"
+                                        variant="outline"
+                                        @click="openPendingResolution(resolucion)"
+                                    >
+                                        <template #icon>
+                                            <Upload class="h-4 w-4" />
+                                        </template>
+                                        Subir Word terminado
+                                    </Button>
+                                </div>
+                            </article>
+                        </div>
+
+                        <div v-else class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                            <FilePlus2 class="mx-auto mb-3 h-8 w-8 text-violet-600" />
+                            <p class="font-bold text-slate-900">Aún no hay resoluciones individuales</p>
+                            <p class="mt-1 text-sm text-slate-600">Use el botón de arriba para preparar la primera.</p>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="space-y-6 xl:sticky xl:top-6 xl:self-start">
+                <section aria-labelledby="step-download-heading" class="overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-sm">
+                    <div class="border-b border-indigo-200 bg-indigo-50 px-6 py-5">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 text-sm font-black text-white">4</span>
+                            <div>
+                                <h2 id="step-download-heading" class="text-xl font-bold text-indigo-950">Descargas y cierre</h2>
+                                <p class="text-sm text-indigo-800">Prepare los documentos para revisarlos o entregarlos.</p>
                             </div>
                         </div>
                     </div>
 
-                    <div v-else class="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-                        Todavía no hay resoluciones registradas individualmente.
-                    </div>
-                </div>
-            </div>
-
-            <div class="space-y-6">
-                <div class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                    <h3 class="mb-4 text-lg font-semibold text-gray-900">Acciones Rápidas</h3>
-                    <div class="space-y-3">
-                        <Button
-                            variant="primary"
-                            :loading="openingResolutionEditor"
-                            :disabled="!resolutionHistoryReady || generatingResolution"
-                            class="w-full justify-start"
-                            @click="handleOpenResolutionEditor"
-                        >
-                            <template #icon>
-                                <FilePlus2 class="h-4 w-4" />
-                            </template>
-                            <template v-if="resolucionesLoading">Cargando resoluciones...</template>
-                            <template v-else-if="resolucionesError">Historial no disponible</template>
-                            <template v-else-if="pendingResolution">
-                                Continuar resolución {{ pendingResolution.numero }}
-                            </template>
-                            <template v-else-if="expediente.ultima_resolucion == null">
-                                Configurar resoluciones
-                            </template>
-                            <template v-else>
-                                Redactar resolución {{ nextResolutionNumber }}
-                            </template>
-                        </Button>
-
-                        <Button
-                            v-if="resolutionHistoryReady && expediente.ultima_resolucion != null"
-                            variant="outline"
-                            :loading="generatingResolution"
-                            :disabled="openingResolutionEditor"
-                            class="w-full justify-start"
-                            @click="handleDownloadResolutionTemplate"
-                        >
-                            <template #icon>
-                                <Download class="h-4 w-4" />
-                            </template>
-                            Descargar plantilla Word
-                            {{ pendingResolution?.numero ?? nextResolutionNumber }}
-                        </Button>
+                    <div class="space-y-4 p-6">
+                        <div v-if="expediente.archivo" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                            <div class="flex items-start gap-3">
+                                <CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                                <div>
+                                    <p class="font-bold text-emerald-950">Documento inicial disponible</p>
+                                    <p class="mt-1 break-words text-sm text-emerald-800">
+                                        {{ expediente.nombre_archivo || 'Documento del expediente' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <div class="flex items-start gap-3">
+                                <Clock class="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                                <p class="text-sm text-amber-900">Cuando cargue el documento inicial, las descargas estarán disponibles aquí.</p>
+                            </div>
+                        </div>
 
                         <Button
                             v-if="expediente.archivo"
                             variant="outline"
+                            size="lg"
                             :loading="loading"
                             class="w-full justify-start"
                             @click="handleDownloadFile"
                         >
                             <template #icon>
-                                <Download class="h-4 w-4" />
+                                <Download class="h-5 w-5" />
                             </template>
-                            Descargar Archivo
+                            Descargar documento inicial
                         </Button>
 
                         <Button
                             v-if="expediente.archivo"
-                            variant="outline"
+                            variant="primary"
+                            size="lg"
                             :loading="isGenerating"
                             class="w-full justify-start"
                             @click="handleGeneratePdf"
                         >
                             <template #icon>
-                                <FileIcon class="h-4 w-4" />
+                                <FileIcon class="h-5 w-5" />
                             </template>
-                            Generar PDF
+                            Generar PDF del expediente
                         </Button>
-                    </div>
-                </div>
 
-                <div
-                    v-if="expediente.archivo"
-                    class="rounded-lg border border-green-200 bg-green-50 p-6"
-                >
-                    <h3 class="mb-3 text-sm font-semibold text-green-900">Archivo Adjunto</h3>
-                    <div class="space-y-2">
-                        <p class="text-sm text-green-700">
-                            <strong>Nombre:</strong> {{ expediente.nombre_archivo || 'documento.docx' }}
+                        <p class="text-xs leading-5 text-slate-500">
+                            Las resoluciones individuales se descargan directamente desde su historial, en el paso 3.
                         </p>
-                        <p class="text-sm text-green-700"><strong>Estado:</strong> Disponible</p>
                     </div>
-                </div>
+                </section>
 
-                <div class="rounded-lg border border-red-200 bg-white p-6 shadow-sm">
-                    <h3 class="mb-4 text-lg font-semibold text-red-900">Zona de Peligro</h3>
-                    <Button
-                        variant="danger"
-                        class="w-full justify-start"
-                        @click="showDeleteConfirm = true"
-                    >
+                <section aria-labelledby="delete-heading" class="rounded-2xl border-2 border-red-300 bg-red-50 p-6 shadow-sm">
+                    <div class="flex items-start gap-3">
+                        <div class="rounded-xl bg-red-600 p-2.5 text-white">
+                            <Trash2 class="h-6 w-6" />
+                        </div>
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-[0.14em] text-red-700">Acción irreversible</p>
+                            <h2 id="delete-heading" class="mt-1 text-xl font-bold text-red-950">Eliminar expediente</h2>
+                            <p class="mt-2 text-sm leading-5 text-red-900">
+                                Use esta opción solo si está completamente seguro. No podrá recuperar los datos ni documentos.
+                            </p>
+                        </div>
+                    </div>
+                    <Button variant="danger" size="lg" class="mt-5 w-full" @click="showDeleteConfirm = true">
                         <template #icon>
-                            <Trash2 class="h-4 w-4" />
+                            <Trash2 class="h-5 w-5" />
                         </template>
-                        Eliminar Expediente
+                        Eliminar este expediente
                     </Button>
-                </div>
-            </div>
+                </section>
+            </aside>
         </div>
 
-        <Modal :open="showEditModal" title="Editar Expediente" size="xl" @close="showEditModal = false">
+        <Modal
+            :open="showEditModal"
+            title="Paso 1: corregir los datos del expediente"
+            size="xl"
+            @close="showEditModal = false"
+        >
             <ExpedienteForm
                 :expediente="expediente"
                 @success="handleEditSuccess"
@@ -879,22 +1224,32 @@ watch(
             />
         </Modal>
 
-        <Modal :open="showUploadModal" title="Subir Archivo" size="md" @close="showUploadModal = false">
-            <FileUploader
-                :on-upload="handleFileUpload"
-                accept=".pdf,.doc,.docx"
-                :loading="loading"
-            />
+        <Modal
+            :open="showUploadModal"
+            :title="expediente.archivo ? 'Paso 2: reemplazar documento inicial' : 'Paso 2: subir documento inicial'"
+            size="md"
+            @close="showUploadModal = false"
+        >
+            <div class="space-y-4">
+                <div class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-950">
+                    Seleccione el archivo que servirá como documento base del expediente. Se aceptan archivos PDF, DOC y DOCX.
+                </div>
+                <FileUploader
+                    :on-upload="handleFileUpload"
+                    accept=".pdf,.doc,.docx"
+                    :loading="loading"
+                />
+            </div>
         </Modal>
 
         <Modal
             :open="showInitialResolutionModal"
-            title="Confirmar última resolución"
+            title="Antes de continuar: confirme la última resolución"
             size="md"
             @close="closeInitialResolutionModal"
         >
             <div class="space-y-5">
-                <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
                     <template v-if="expediente.resolucion_detectada != null">
                         Detectamos que el documento llega hasta la resolución
                         <strong>N.º {{ expediente.resolucion_detectada }}</strong>. Confirme el número o
@@ -920,18 +1275,22 @@ watch(
                         type="number"
                         min="0"
                         step="1"
-                        class="w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        class="w-full rounded-lg border border-slate-300 px-4 py-3 text-lg font-semibold shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
-                    <p class="mt-1 text-xs text-gray-500">Use 0 si todavía no existe ninguna resolución.</p>
+                    <p class="mt-2 text-sm text-slate-600">Use 0 si todavía no existe ninguna resolución.</p>
                 </div>
 
                 <div class="flex justify-end space-x-3">
-                    <Button variant="outline" @click="closeInitialResolutionModal">Ahora no</Button>
+                    <Button variant="outline" size="lg" @click="closeInitialResolutionModal">Ahora no</Button>
                     <Button
                         variant="primary"
+                        size="lg"
                         :loading="initialResolutionLoading"
                         @click="handleConfirmInitialResolution"
                     >
+                        <template #icon>
+                            <CheckCircle2 class="h-5 w-5" />
+                        </template>
                         Confirmar número
                     </Button>
                 </div>
@@ -940,12 +1299,12 @@ watch(
 
         <Modal
             :open="showCompleteResolutionModal"
-            :title="`Completar Resolución N.º ${completionResolutionNumber ?? ''}`"
+            :title="`Paso 3: completar la Resolución N.º ${completionResolutionNumber ?? ''}`"
             size="md"
             @close="showCompleteResolutionModal = false"
         >
             <div class="space-y-5">
-                <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     La plantilla ya fue descargada. Termine de redactarla y arrastre aquí el documento Word. El
                     número del expediente se actualizará únicamente cuando la carga finalice correctamente.
                 </div>
@@ -957,31 +1316,32 @@ watch(
                 />
 
                 <p class="text-xs text-gray-500">
-                    Conservaremos el documento de esta resolución en el historial y actualizaremos el expediente
-                    consolidado.
+                    Al finalizar, guardaremos esta resolución en el historial y actualizaremos el expediente consolidado.
                 </p>
             </div>
         </Modal>
 
         <Modal
             :open="showUpdateStatusModal"
-            title="Actualizar estado del expediente"
+            title="Actualizar estado o nota del expediente"
             size="md"
             @close="showUpdateStatusModal = false"
         >
             <div class="space-y-4">
-                <p class="text-sm text-gray-600">
-                    ¿Desea actualizar el estado del expediente ahora? Puede dejar una nota o pegar el texto del
-                    estado.
+                <p class="text-sm text-slate-700">
+                    Escriba una nota breve sobre la situación actual. Esta información se verá en la parte superior del expediente.
                 </p>
                 <textarea
                     v-model="statusText"
                     rows="6"
-                    class="w-full rounded-md border border-gray-300 p-2 text-sm"
+                    class="w-full rounded-lg border border-slate-300 p-3 text-base focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 ></textarea>
                 <div class="flex justify-end space-x-3">
-                    <Button variant="outline" @click="showUpdateStatusModal = false">No, luego</Button>
-                    <Button variant="primary" :loading="statusLoading" @click="handleUpdateStatus">
+                    <Button variant="outline" size="lg" @click="showUpdateStatusModal = false">Cancelar</Button>
+                    <Button variant="primary" size="lg" :loading="statusLoading" @click="handleUpdateStatus">
+                        <template #icon>
+                            <CheckCircle2 class="h-5 w-5" />
+                        </template>
                         Guardar estado
                     </Button>
                 </div>
@@ -990,28 +1350,31 @@ watch(
 
         <Modal
             :open="showDeleteConfirm"
-            title="Confirmar Eliminación"
+            title="Eliminar expediente de forma permanente"
             size="md"
             @close="showDeleteConfirm = false"
         >
-            <div class="space-y-4">
-                <div class="flex items-center space-x-3">
+            <div class="space-y-5">
+                <div class="flex items-center space-x-3 rounded-xl border border-red-200 bg-red-50 p-4">
                     <div class="flex-shrink-0">
                         <Trash2 class="h-6 w-6 text-red-600" />
                     </div>
                     <div>
-                        <p class="text-sm text-gray-900">¿Está seguro que desea eliminar este expediente?</p>
-                        <p class="text-sm text-gray-500">Esta acción no se puede deshacer.</p>
+                        <p class="font-bold text-red-950">¿Está seguro que desea eliminar este expediente?</p>
+                        <p class="mt-1 text-sm text-red-800">Esta acción no se puede deshacer.</p>
                     </div>
                 </div>
-                <div class="rounded-md border border-red-200 bg-red-50 p-3">
-                    <p class="text-sm text-red-700">
+                <div class="rounded-xl border border-red-200 bg-white p-4">
+                    <p class="text-sm text-red-800">
                         <strong>Expediente:</strong> #{{ expediente.numero }} - {{ expediente.materia }}
                     </p>
                 </div>
                 <div class="flex justify-end space-x-3">
-                    <Button variant="outline" @click="showDeleteConfirm = false">Cancelar</Button>
-                    <Button variant="danger" :loading="loading" @click="handleDelete">
+                    <Button variant="outline" size="lg" @click="showDeleteConfirm = false">Cancelar</Button>
+                    <Button variant="danger" size="lg" :loading="loading" @click="handleDelete">
+                        <template #icon>
+                            <Trash2 class="h-5 w-5" />
+                        </template>
                         Eliminar Expediente
                     </Button>
                 </div>

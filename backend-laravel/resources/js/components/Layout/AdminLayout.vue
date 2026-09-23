@@ -21,32 +21,32 @@ const handleLogout = async (): Promise<void> => {
 
 <template>
     <div class="min-h-screen bg-slate-100">
-        <header class="border-b border-slate-700 bg-slate-950 text-white shadow-sm">
-            <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <header class="border-b border-blue-950 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white shadow-lg">
+            <div class="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
                 <div class="flex min-w-0 items-center gap-3">
-                    <div class="rounded-lg bg-blue-600 p-2">
-                        <Shield class="h-5 w-5" />
+                    <div class="rounded-xl bg-violet-600 p-3 shadow-lg shadow-violet-950/50">
+                        <Shield class="h-6 w-6" aria-hidden="true" />
                     </div>
                     <div class="min-w-0">
-                        <p class="truncate font-semibold">Panel administrativo</p>
-                        <p class="truncate text-xs text-slate-400">{{ user?.username }}</p>
+                        <p class="truncate text-lg font-bold">Panel de administración</p>
+                        <p class="truncate text-sm text-slate-300">Usuario: {{ user?.username }}</p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-2">
                     <RouterLink
                         to="/main"
-                        class="inline-flex items-center rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+                        class="inline-flex min-h-11 items-center rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-blue-300"
                     >
-                        <ArrowLeft class="mr-2 h-4 w-4" />
+                        <ArrowLeft class="mr-2 h-5 w-5" />
                         <span class="hidden sm:inline">Volver al sistema</span>
                     </RouterLink>
                     <button
                         type="button"
-                        class="inline-flex items-center rounded-md bg-red-700 px-3 py-2 text-sm font-medium hover:bg-red-600"
+                        class="inline-flex min-h-11 items-center rounded-xl border border-red-400 bg-red-700 px-4 text-sm font-bold text-white hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-300"
                         @click="handleLogout"
                     >
-                        <LogOut class="mr-2 h-4 w-4" />
+                        <LogOut class="mr-2 h-5 w-5" />
                         Salir
                     </button>
                 </div>

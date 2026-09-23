@@ -27,19 +27,19 @@ const roundedProgress = computed(() => Math.round(clampedProgress.value));
     v-bind="$attrs"
     :class="['w-full', props.className]"
   >
-    <div class="mb-1 flex items-center justify-between">
-      <span class="text-sm font-medium text-gray-700">
-        Subiendo archivo...
+    <div class="mb-2 flex items-center justify-between">
+      <span class="text-sm font-bold text-slate-800">
+        Subiendo documento
       </span>
       <span
         v-if="props.showPercentage"
-        class="text-sm font-medium text-gray-700"
+        class="text-sm font-bold text-blue-800"
       >
         {{ roundedProgress }}%
       </span>
     </div>
     <div
-      class="h-2 w-full rounded-full bg-gray-200"
+      class="h-3 w-full overflow-hidden rounded-full bg-slate-200"
       role="progressbar"
       aria-label="Progreso de subida"
       aria-valuemin="0"
@@ -47,7 +47,7 @@ const roundedProgress = computed(() => Math.round(clampedProgress.value));
       :aria-valuenow="roundedProgress"
     >
       <div
-        class="h-2 rounded-full bg-blue-600 transition-all duration-300"
+        class="h-3 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 transition-all duration-300"
         :style="{ width: `${clampedProgress}%` }"
       />
     </div>

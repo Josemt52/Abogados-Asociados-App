@@ -194,10 +194,10 @@ onMounted(async () => {
         <div class="mx-auto max-w-7xl space-y-6">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                    <p class="text-sm font-semibold uppercase tracking-wider text-blue-700">Control interno</p>
-                    <h1 class="mt-1 text-3xl font-bold text-slate-950">Revisión de cargas masivas</h1>
-                    <p class="mt-2 text-slate-600">
-                        Corrige lecturas pendientes, resuelve duplicados y controla el registro automático.
+                    <p class="text-sm font-bold uppercase tracking-wider text-violet-700">Administración · Cargas masivas</p>
+                    <h1 class="mt-1 text-3xl font-bold text-slate-950">Documentos que requieren revisión</h1>
+                    <p class="mt-2 text-base text-slate-700">
+                        Revise primero los documentos pendientes. Puede corregir sus datos, resolver duplicados o volver a procesarlos.
                     </p>
                 </div>
                 <Button variant="outline" :disabled="loading" @click="loadItems(currentPage)">
@@ -207,55 +207,55 @@ onMounted(async () => {
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                    <p class="text-sm font-medium text-slate-500">Por atender</p>
+                <div class="rounded-2xl border-2 border-blue-200 bg-blue-50 p-5 shadow-sm">
+                    <p class="text-sm font-bold text-blue-800">Por atender primero</p>
                     <p class="mt-2 text-3xl font-bold text-slate-950">{{ actionableTotal }}</p>
                 </div>
-                <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
-                    <p class="text-sm font-medium text-amber-800">Pendientes</p>
+                <div class="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5">
+                    <p class="text-sm font-bold text-amber-800">Pendientes</p>
                     <p class="mt-2 text-3xl font-bold text-amber-950">{{ summary.pendientes }}</p>
                 </div>
-                <div class="rounded-xl border border-violet-200 bg-violet-50 p-5">
-                    <p class="text-sm font-medium text-violet-800">En revisión</p>
+                <div class="rounded-2xl border-2 border-violet-200 bg-violet-50 p-5">
+                    <p class="text-sm font-bold text-violet-800">En revisión</p>
                     <p class="mt-2 text-3xl font-bold text-violet-950">{{ summary.revision }}</p>
                 </div>
-                <div class="rounded-xl border border-red-200 bg-red-50 p-5">
-                    <p class="text-sm font-medium text-red-800">Errores técnicos</p>
+                <div class="rounded-2xl border-2 border-red-200 bg-red-50 p-5">
+                    <p class="text-sm font-bold text-red-800">Errores técnicos</p>
                     <p class="mt-2 text-3xl font-bold text-red-950">{{ summary.errores }}</p>
                 </div>
             </div>
 
-            <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div class="flex items-start gap-3">
-                    <Settings class="mt-0.5 h-5 w-5 text-blue-700" />
+                    <Settings class="mt-0.5 h-6 w-6 text-violet-700" />
                     <div class="flex-1">
-                        <h2 class="font-semibold text-slate-950">Modo de registro</h2>
+                        <h2 class="text-lg font-bold text-slate-950">Cómo se registran los lotes nuevos</h2>
                         <p class="mt-1 text-sm text-slate-600">
                             Esta preferencia se copia a cada lote nuevo; no altera documentos que ya están procesándose.
                         </p>
                         <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end">
-                            <label class="flex flex-1 items-start gap-3 rounded-lg border border-slate-200 p-4">
+                            <label class="flex flex-1 items-start gap-3 rounded-xl border-2 border-slate-200 p-4 hover:border-violet-300">
                                 <input
                                     v-model="configuration.registro_automatico"
                                     type="checkbox"
-                                    class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                                    class="mt-1 h-5 w-5 rounded border-slate-300 text-violet-700 focus:ring-violet-600"
                                 />
                                 <span>
-                                    <span class="block text-sm font-semibold text-slate-900">Registro automático</span>
+                                    <span class="block text-base font-bold text-slate-900">Registrar automáticamente</span>
                                     <span class="mt-1 block text-sm text-slate-600">
                                         Los documentos confiables se registran sin intervención administrativa.
                                     </span>
                                 </span>
                             </label>
                             <label class="block sm:w-52">
-                                <span class="mb-1 block text-sm font-medium text-slate-700">Confianza mínima</span>
+                                <span class="mb-2 block text-sm font-bold text-slate-700">Confianza mínima</span>
                                 <input
                                     v-model.number="configuration.confianza_minima"
                                     type="number"
                                     min="0.5"
                                     max="0.99"
                                     step="0.01"
-                                    class="w-full rounded-md border border-slate-300 px-3 py-2"
+                                    class="min-h-12 w-full rounded-xl border-2 border-slate-300 px-3 py-2 text-base focus:border-violet-600 focus:outline-none focus:ring-4 focus:ring-violet-100"
                                 />
                             </label>
                             <Button :loading="savingConfiguration" @click="saveConfiguration">
@@ -266,19 +266,20 @@ onMounted(async () => {
                 </div>
             </section>
 
-            <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div class="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row">
+            <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+                <div class="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 p-5 md:flex-row">
                     <div class="relative flex-1">
-                        <Search class="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                        <Search class="pointer-events-none absolute left-4 top-3.5 h-5 w-5 text-slate-500" />
                         <input
                             v-model="searchTerm"
                             type="search"
-                            placeholder="Buscar por archivo o número..."
-                            class="w-full rounded-md border border-slate-300 py-2 pl-10 pr-3"
+                            aria-label="Buscar documento por archivo o número de expediente"
+                            placeholder="Buscar por archivo o número de expediente"
+                            class="min-h-12 w-full rounded-xl border-2 border-slate-300 bg-white py-2 pl-12 pr-3 text-base focus:border-violet-600 focus:outline-none focus:ring-4 focus:ring-violet-100"
                             @keyup.enter="loadItems(1)"
                         />
                     </div>
-                    <select v-model="filterStatus" class="rounded-md border border-slate-300 px-3 py-2" @change="loadItems(1)">
+                    <select v-model="filterStatus" aria-label="Filtrar por estado" class="min-h-12 rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-base focus:border-violet-600 focus:outline-none focus:ring-4 focus:ring-violet-100" @change="loadItems(1)">
                         <option value="">Todos los pendientes de atención</option>
                         <option value="pendiente">Pendientes</option>
                         <option value="revision">En revisión</option>
@@ -290,7 +291,7 @@ onMounted(async () => {
 
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200">
-                        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <thead class="bg-slate-950 text-left text-xs font-bold uppercase tracking-wide text-slate-200">
                             <tr>
                                 <th class="px-5 py-3">Documento</th>
                                 <th class="px-5 py-3">Lectura</th>
@@ -309,7 +310,7 @@ onMounted(async () => {
                                     <p class="mt-2 font-medium text-slate-900">No hay documentos en esta vista</p>
                                 </td>
                             </tr>
-                            <tr v-for="item in items" v-else :key="item.id" class="align-top hover:bg-slate-50">
+                            <tr v-for="item in items" v-else :key="item.id" class="align-top hover:bg-violet-50">
                                 <td class="px-5 py-4">
                                     <div class="flex max-w-xs items-start gap-3">
                                         <FileText class="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
@@ -339,11 +340,11 @@ onMounted(async () => {
                                     <div class="flex flex-wrap gap-2">
                                         <button
                                             type="button"
-                                            class="rounded-md border border-slate-300 p-2 text-slate-600 hover:bg-slate-100"
-                                            title="Descargar documento"
+                                            class="inline-flex min-h-10 items-center rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-700 hover:bg-white hover:text-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-100"
                                             @click="download(item)"
                                         >
-                                            <Download class="h-4 w-4" />
+                                            <Download class="mr-1 h-4 w-4" aria-hidden="true" />
+                                            Descargar
                                         </button>
                                         <Button
                                             v-if="item.estado !== 'registrado'"

@@ -27,7 +27,7 @@ const sizeClasses: Record<ModalSize, string> = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
-  full: 'max-w-[95vw]',
+  full: 'max-w-[calc(100vw-2rem)]',
 };
 
 const isVisible = computed(() => props.open || props.isOpen);
@@ -45,24 +45,24 @@ const isVisible = computed(() => props.open || props.isOpen);
       <div class="flex min-h-screen items-center justify-center p-4">
         <button
           type="button"
-          class="fixed inset-0 cursor-default bg-black bg-opacity-50 transition-opacity"
+          class="fixed inset-0 cursor-default bg-slate-950/60 backdrop-blur-[1px] transition-opacity"
           aria-label="Cerrar modal"
           @click="emit('close')"
         />
 
         <div
           :class="[
-            'relative max-h-screen w-full overflow-y-auto rounded-lg bg-white shadow-xl',
+            'relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl',
             sizeClasses[props.size],
           ]"
         >
-          <div class="flex items-center justify-between border-b border-gray-200 p-6">
-            <h3 class="text-lg font-semibold text-gray-900">
+          <div class="flex items-center justify-between gap-4 border-b border-blue-900 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-6 py-5 text-white">
+            <h3 class="text-xl font-bold tracking-tight">
               {{ props.title }}
             </h3>
             <button
               type="button"
-              class="text-gray-400 transition-colors hover:text-gray-600"
+              class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-blue-300"
               aria-label="Cerrar"
               @click="emit('close')"
             >
@@ -70,7 +70,7 @@ const isVisible = computed(() => props.open || props.isOpen);
             </button>
           </div>
 
-          <div class="p-6">
+          <div class="bg-slate-50 p-6">
             <slot />
           </div>
         </div>

@@ -29,19 +29,24 @@ onBeforeUnmount(() => window.removeEventListener('app:toast', handleToast));
 </script>
 
 <template>
-    <div class="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3">
+    <div class="pointer-events-none fixed right-5 top-5 z-[100] flex w-[min(28rem,calc(100vw-2rem))] flex-col gap-3">
         <TransitionGroup name="toast">
             <div
                 v-for="item in messages"
                 :key="item.id"
-                class="pointer-events-auto flex items-start gap-3 rounded-lg bg-gray-800 px-4 py-3 text-sm text-white shadow-lg"
-                role="status"
+                :class="[
+                    'pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 text-base shadow-xl',
+                    item.type === 'success' && 'border-emerald-300 bg-emerald-950 text-white',
+                    item.type === 'error' && 'border-red-300 bg-red-950 text-white',
+                    item.type === 'info' && 'border-blue-300 bg-blue-950 text-white',
+                ]"
+                :role="item.type === 'error' ? 'alert' : 'status'"
             >
-                <CheckCircle2 v-if="item.type === 'success'" class="mt-0.5 h-5 w-5 shrink-0 text-green-400" />
-                <AlertCircle v-else-if="item.type === 'error'" class="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
-                <Info v-else class="mt-0.5 h-5 w-5 shrink-0 text-blue-400" />
+                <CheckCircle2 v-if="item.type === 'success'" class="mt-0.5 h-6 w-6 shrink-0 text-emerald-300" />
+                <AlertCircle v-else-if="item.type === 'error'" class="mt-0.5 h-6 w-6 shrink-0 text-red-300" />
+                <Info v-else class="mt-0.5 h-6 w-6 shrink-0 text-blue-300" />
                 <span class="flex-1">{{ item.message }}</span>
-                <button class="rounded p-0.5 text-gray-300 hover:text-white" type="button" aria-label="Cerrar" @click="remove(item.id)">
+                <button class="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white" type="button" aria-label="Cerrar" @click="remove(item.id)">
                     <X class="h-4 w-4" />
                 </button>
             </div>

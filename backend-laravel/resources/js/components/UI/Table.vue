@@ -53,7 +53,7 @@ const cellValue = (row: TableRow, key: string) => row[key];
 <template>
   <div
     v-if="props.loading"
-    class="rounded-lg bg-white shadow-sm"
+    class="rounded-2xl border border-slate-200 bg-white shadow-sm"
   >
     <div class="p-8 text-center">
       <div class="animate-pulse">
@@ -66,7 +66,7 @@ const cellValue = (row: TableRow, key: string) => row[key];
 
   <div
     v-else
-    class="overflow-hidden rounded-lg bg-white shadow-sm"
+    class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md"
   >
     <div :class="props.stackOnMobile ? 'overflow-visible' : 'overflow-x-auto'">
       <table
@@ -76,13 +76,13 @@ const cellValue = (row: TableRow, key: string) => row[key];
           props.stackOnMobile ? 'stacked-table' : '',
         ]"
       >
-        <thead class="bg-gray-50">
+        <thead class="bg-slate-950">
           <tr>
             <th
               v-for="column in props.columns"
               :key="column.key"
               :class="[
-                'px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500',
+                'px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-200',
                 column.headerClass,
               ]"
             >
@@ -90,11 +90,11 @@ const cellValue = (row: TableRow, key: string) => row[key];
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 bg-white">
+        <tbody class="divide-y divide-slate-200 bg-white">
           <tr v-if="displayedRows.length === 0">
             <td
               :colspan="props.columns.length"
-              class="empty-cell px-6 py-12 text-center text-gray-500"
+              class="empty-cell px-6 py-14 text-center text-base font-medium text-slate-500"
             >
               {{ props.emptyMessage }}
             </td>
@@ -104,8 +104,8 @@ const cellValue = (row: TableRow, key: string) => row[key];
               v-for="(row, index) in displayedRows"
               :key="String(row.id ?? index)"
               :class="[
-                hasRowClickListener ? 'cursor-pointer hover:bg-gray-50' : '',
-                'data-row transition-colors',
+                hasRowClickListener ? 'cursor-pointer hover:bg-blue-50' : '',
+                'data-row transition-colors duration-150',
               ]"
               @click="emit('row-click', row)"
             >
@@ -114,7 +114,7 @@ const cellValue = (row: TableRow, key: string) => row[key];
                 :key="column.key"
                 :data-label="columnLabel(column)"
                 :class="[
-                  'px-6 py-4 text-sm text-gray-900',
+                  'px-6 py-5 text-sm text-slate-900',
                   column.cellClass ?? 'max-w-[200px]',
                 ]"
               >
@@ -164,7 +164,7 @@ const cellValue = (row: TableRow, key: string) => row[key];
     display: block;
     overflow: hidden;
     margin-bottom: 0.75rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #cbd5e1;
     border-radius: 0.75rem;
   }
 
@@ -184,7 +184,7 @@ const cellValue = (row: TableRow, key: string) => row[key];
 
   .stacked-table td[data-label]::before {
     content: attr(data-label);
-    color: #6b7280;
+    color: #475569;
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.05em;

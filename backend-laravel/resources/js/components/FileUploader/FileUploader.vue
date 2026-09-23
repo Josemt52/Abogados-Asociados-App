@@ -127,18 +127,21 @@ const clearAllFiles = (): void => {
 </script>
 
 <template>
-    <div class="space-y-4">
+    <div class="space-y-5">
         <div
             v-if="selectedFiles.length === 0"
-            class="rounded-lg border-2 border-dashed p-8 text-center transition-colors"
-            :class="dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'"
+            class="rounded-2xl border-2 border-dashed p-8 text-center transition-colors"
+            :class="dragOver ? 'border-blue-500 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50'"
             @dragover.prevent="dragOver = true"
             @dragleave="dragOver = false"
             @drop.prevent="handleDrop"
         >
-            <Upload class="mx-auto mb-4 h-12 w-12 text-gray-400" />
-            <p class="mb-2 text-sm text-gray-600">
-                Arrastra y suelta {{ multiple ? 'archivos' : 'un archivo' }} aquí, o
+            <Upload class="mx-auto mb-4 h-14 w-14 text-blue-700" aria-hidden="true" />
+            <p class="mb-1 text-lg font-bold text-slate-950">
+                1. Seleccione {{ multiple ? 'los documentos' : 'el documento' }}
+            </p>
+            <p class="mb-4 text-base text-slate-600">
+                Arrastre {{ multiple ? 'los documentos' : 'el documento' }} aquí o use el botón para selecciona{{ multiple ? 'rlos' : 'rlo' }} desde este equipo.
             </p>
             <label class="inline-block">
                 <input
@@ -155,11 +158,11 @@ const clearAllFiles = (): void => {
                     class="cursor-pointer"
                     :disabled="loading || isUploading"
                 >
-                    Seleccionar {{ multiple ? 'archivos' : 'archivo' }}
+                    Elegir {{ multiple ? 'documentos' : 'documento' }}
                 </Button>
             </label>
-            <p class="mt-2 text-xs text-gray-500">
-                Tipos permitidos: {{ accept }} • Máximo {{ formatFileSize(maxSize) }}<template v-if="multiple">
+            <p class="mt-4 text-sm text-slate-600">
+                Formatos permitidos: {{ accept }} · Máximo {{ formatFileSize(maxSize) }}<template v-if="multiple">
                     por archivo</template
                 >
             </p>
@@ -167,7 +170,7 @@ const clearAllFiles = (): void => {
 
         <div v-else class="space-y-3">
             <div class="flex items-center justify-between">
-                <h4 class="text-sm font-medium text-gray-900">
+                <h4 class="text-base font-bold text-slate-900">
                     {{ selectedFiles.length }} archivo{{ selectedFiles.length > 1 ? 's' : '' }} seleccionado{{
                         selectedFiles.length > 1 ? 's' : ''
                     }}
@@ -189,14 +192,16 @@ const clearAllFiles = (): void => {
                 <div
                     v-for="(file, index) in selectedFiles"
                     :key="`${file.name}-${file.lastModified}-${index}`"
-                    class="rounded-lg border border-gray-200 p-4"
+                    class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
                 >
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-3">
-                            <FileIcon class="h-8 w-8 text-blue-600" />
+                        <div class="min-w-0 flex items-center space-x-3">
+                            <div class="rounded-xl bg-white p-2 shadow-sm">
+                                <FileIcon class="h-7 w-7 text-blue-700" aria-hidden="true" />
+                            </div>
                             <div>
-                                <p class="text-sm font-medium text-gray-900">{{ file.name }}</p>
-                                <p class="text-sm text-gray-500">{{ formatFileSize(file.size) }}</p>
+                                <p class="truncate text-base font-bold text-slate-950">{{ file.name }}</p>
+                                <p class="text-sm text-emerald-800">Listo para subir · {{ formatFileSize(file.size) }}</p>
                             </div>
                         </div>
                         <div class="flex items-center space-x-2">
@@ -207,23 +212,24 @@ const clearAllFiles = (): void => {
                                 :disabled="loading"
                                 @click="handleUpload(file)"
                             >
-                                Subir
+                                Subir documento
                             </Button>
                             <button
                                 type="button"
-                                class="text-gray-400 transition-colors hover:text-red-600"
+                                class="inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-red-100 hover:text-red-800 focus:outline-none focus:ring-4 focus:ring-red-100"
                                 :disabled="isUploading || loading"
                                 :aria-label="`Quitar ${file.name}`"
                                 @click="removeFile(file)"
                             >
-                                <X class="h-5 w-5" />
+                                <X class="mr-1 h-5 w-5" aria-hidden="true" />
+                                Quitar
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center">
+            <div class="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center hover:border-blue-400">
                 <label class="cursor-pointer">
                     <input
                         type="file"
@@ -233,15 +239,15 @@ const clearAllFiles = (): void => {
                         :disabled="loading || isUploading"
                         @change="handleFileChange"
                     />
-                    <span class="text-sm text-gray-600">+ Agregar más archivos</span>
+                    <span class="text-base font-semibold text-blue-800">+ Agregar otro documento</span>
                 </label>
             </div>
         </div>
 
-        <div class="text-xs text-gray-500">
-            <div class="flex items-center space-x-1">
-                <AlertCircle class="h-3 w-3" />
-                <span>Los archivos se suben individualmente. Tipos permitidos: {{ accept }}</span>
+        <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+            <div class="flex items-center space-x-2">
+                <AlertCircle class="h-4 w-4 shrink-0 text-blue-700" aria-hidden="true" />
+                <span>Revise el nombre antes de subir. Cada documento se carga de forma individual.</span>
             </div>
         </div>
     </div>
