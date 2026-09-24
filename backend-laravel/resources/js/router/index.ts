@@ -40,6 +40,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/Expedientes/Expedientes.vue'),
       },
       {
+        path: 'expedientes/nuevo',
+        name: 'expediente-new',
+        component: () => import('@/pages/Expedientes/NuevoExpediente.vue'),
+      },
+      {
         path: 'expedientes/:id',
         name: 'expediente-detail',
         component: () => import('@/pages/ExpedienteDetail/ExpedienteDetail.vue'),

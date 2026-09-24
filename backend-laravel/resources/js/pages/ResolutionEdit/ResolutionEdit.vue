@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
 <template>
     <main class="flex h-screen h-dvh flex-col overflow-hidden bg-gray-100" aria-label="Editor de resolución">
         <header class="relative z-20 shrink-0 border-b border-gray-400 bg-white text-gray-950">
-            <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+            <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:px-6">
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-gray-700">
                         <FilePenLine class="h-4 w-4" aria-hidden="true" />

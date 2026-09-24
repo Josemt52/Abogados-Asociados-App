@@ -2,6 +2,7 @@
 import { watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { authAPI } from '@/api';
+import BackButton from '@/components/UI/BackButton.vue';
 import { useAuth } from '@/composables/useAuth';
 
 const route = useRoute();
@@ -25,7 +26,10 @@ const handleLogout = async () => {
 <template>
   <div class="simple-app">
     <header class="simple-header">
-      <span class="simple-brand">{{ appName }}</span>
+      <div class="flex items-center gap-5">
+        <BackButton />
+        <span class="simple-brand">{{ appName }}</span>
+      </div>
       <div class="simple-header-actions">
         <span>{{ user?.username }}</span>
         <RouterLink v-if="route.name !== 'main'" class="plain-button" to="/main">Menú principal</RouterLink>

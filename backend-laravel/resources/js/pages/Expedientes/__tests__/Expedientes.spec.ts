@@ -16,6 +16,7 @@ const setup = async (action = 'ver', main = false) => {
     routes: [
       { path: '/main', name: 'main', component: Main },
       { path: '/expedientes', name: 'expedientes', component: Expedientes },
+      { path: '/expedientes/nuevo', name: 'expediente-new', component: { template: '<div>Nuevo expediente</div>' } },
       { path: '/expedientes/:id', name: 'expediente-detail', component: { template: '<div>Editor destino</div>' } },
       { path: '/carga-masiva', component: { template: '<div />' } },
     ],
@@ -41,13 +42,17 @@ describe('Flujo sencillo de expedientes', () => {
   it('muestra exactamente las cinco opciones del menú en orden', async () => {
     const { wrapper } = await setup('ver', true);
     expect(wrapper.findAll('nav a').map(link => link.text())).toEqual([
-      'Ver expedientes', 'Editar expedientes', 'Actualizar expedientes', 'Eliminar expedientes', 'Carga masiva de expedientes',
+      'Ver expedientes', 'Nuevo expediente', 'Actualizar expedientes', 'Eliminar expedientes', 'Carga masiva de expedientes',
     ]);
     expect(wrapper.find('aside').exists()).toBe(false);
+    expect(wrapper.find('a[href="/paneladmin"]').exists()).toBe(false);
+    expect(wrapper.findAll('nav a')[1].attributes('href')).toBe('/expedientes/nuevo');
   });
-  it('no carga la lista al entrar y muestra las cuatro acciones al encontrar el número', async () => {
+  it('carga la lista al entrar y muestra las cuatro acciones al encontrar el número', async () => {
     const { wrapper } = await setup();
-    expect(mocks.getAll).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(mocks.getAll).toHaveBeenCalledOnce();
+    expect(wrapper.get('table').text()).toContain('001-2026');
     await search(wrapper, ' 001-2026 ');
     expect(wrapper.get('.record-actions').text()).toContain('Ver expediente 001-2026');
     expect(wrapper.get('.record-actions').findAll('button, a')).toHaveLength(4);
@@ -98,6 +103,7 @@ describe('Flujo sencillo de expedientes', () => {
     expect(mocks.remove).toHaveBeenCalledExactlyOnceWith(7);
     expect(wrapper.text()).toContain('fue eliminado');
     expect(wrapper.find('.search-result').exists()).toBe(false);
+    expect(wrapper.find('table').exists()).toBe(false);
   });
   it('mantiene la confirmación abierta si falla la eliminación', async () => {
     mocks.remove.mockRejectedValue(new Error('sin conexión'));
@@ -107,5 +113,28 @@ describe('Flujo sencillo de expedientes', () => {
     await flushPromises();
     expect(wrapper.findComponent(DeleteExpedienteModal).exists()).toBe(true);
     expect(wrapper.get('[role="alert"]').text()).toContain('sin conexión');
+  });
+  it('permite seleccionar de la lista sin escribir el número', async () => {
+    const { wrapper } = await setup();
+    await flushPromises();
+    await wrapper.get('button[aria-label="Seleccionar expediente 001-2026"]').trigger('click');
+    expect(wrapper.get('.search-result').text()).toContain('001-2026');
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+  it('seleccionar de la lista de actualizar abre el editor', async () => {
+    const { wrapper, router } = await setup('actualizar');
+    await flushPromises();
+    await wrapper.get('button[aria-label="Seleccionar expediente 001-2026"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.query.editor).toBe('true');
+  });
+  it('pagina la lista sin omitir expedientes', async () => {
+    mocks.getAll.mockResolvedValue(Array.from({ length: 16 }, (_, index) => ({ ...record, id: index + 1, numero: 'EXP-' + (index + 1) })));
+    const { wrapper } = await setup();
+    await flushPromises();
+    expect(wrapper.findAll('tbody tr')).toHaveLength(15);
+    await wrapper.findAll('button').find(button => button.text() === 'Siguiente')!.trigger('click');
+    expect(wrapper.findAll('tbody tr')).toHaveLength(1);
+    expect(wrapper.get('tbody').text()).toContain('EXP-16');
   });
 });

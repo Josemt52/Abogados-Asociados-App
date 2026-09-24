@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
+import BackButton from '@/components/UI/BackButton.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { isAxiosError } from 'axios';
 import { authAPI } from '@/api';
@@ -56,6 +57,7 @@ const handleSubmit = async () => {
 <template>
   <main class="min-h-screen flex items-center justify-center p-8">
     <section class="w-full max-w-xl border-2 border-gray-500 bg-white p-8">
+      <BackButton class="mb-6" />
       <h1 class="text-3xl font-bold">{{ appName }}</h1>
       <p class="mt-3 mb-8">Escriba su usuario y contraseña para entrar.</p>
       <form class="space-y-6" @submit.prevent="handleSubmit">
