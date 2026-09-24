@@ -36,15 +36,15 @@ onBeforeUnmount(() => window.removeEventListener('app:toast', handleToast));
                 :key="item.id"
                 :class="[
                     'pointer-events-auto flex items-start gap-3 rounded-2xl border px-4 py-3 text-base shadow-xl',
-                    item.type === 'success' && 'border-emerald-300 bg-emerald-950 text-white',
-                    item.type === 'error' && 'border-red-300 bg-red-950 text-white',
-                    item.type === 'info' && 'border-blue-300 bg-blue-950 text-white',
+                    item.type === 'success' && 'border-gray-300 bg-gray-950 text-white',
+                    item.type === 'error' && 'border-gray-300 bg-gray-950 text-white',
+                    item.type === 'info' && 'border-gray-300 bg-gray-950 text-white',
                 ]"
                 :role="item.type === 'error' ? 'alert' : 'status'"
             >
-                <CheckCircle2 v-if="item.type === 'success'" class="mt-0.5 h-6 w-6 shrink-0 text-emerald-300" />
-                <AlertCircle v-else-if="item.type === 'error'" class="mt-0.5 h-6 w-6 shrink-0 text-red-300" />
-                <Info v-else class="mt-0.5 h-6 w-6 shrink-0 text-blue-300" />
+                <CheckCircle2 v-if="item.type === 'success'" class="mt-0.5 h-6 w-6 shrink-0 text-gray-300" />
+                <AlertCircle v-else-if="item.type === 'error'" class="mt-0.5 h-6 w-6 shrink-0 text-gray-300" />
+                <Info v-else class="mt-0.5 h-6 w-6 shrink-0 text-gray-300" />
                 <span class="flex-1">{{ item.message }}</span>
                 <button class="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-white/80 hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white" type="button" aria-label="Cerrar" @click="remove(item.id)">
                     <X class="h-4 w-4" />

@@ -28,23 +28,23 @@ const props = withDefaults(
 );
 
 const baseClasses =
-  'inline-flex min-h-12 items-center justify-center rounded-xl border font-semibold shadow-sm transition-all duration-150 focus:outline-none focus:ring-4 focus:ring-offset-2 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center rounded border-2 font-semibold focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'border-blue-800 bg-blue-700 text-white shadow-blue-200 hover:bg-blue-800 hover:shadow-md focus:ring-blue-400',
+    'border-gray-800 bg-gray-100 text-gray-950 hover:bg-gray-200',
   secondary:
-    'border-violet-700 bg-violet-600 text-white shadow-violet-200 hover:bg-violet-700 hover:shadow-md focus:ring-violet-300',
+    'border-gray-600 bg-white text-gray-950 hover:bg-gray-100',
   danger:
-    'border-red-700 bg-red-600 text-white shadow-red-200 hover:bg-red-700 hover:shadow-md focus:ring-red-300',
+    'border-gray-950 bg-white text-gray-950 hover:bg-gray-200',
   outline:
-    'border-slate-300 bg-white text-slate-800 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-900 focus:ring-blue-300',
+    'border-gray-500 bg-white text-gray-950 hover:bg-gray-100',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'min-h-10 px-3 py-2 text-sm',
-  md: 'px-5 py-2.5 text-sm',
-  lg: 'min-h-14 px-6 py-3 text-base',
+  sm: 'min-h-12 px-4 py-2 text-base',
+  md: 'min-h-14 px-5 py-3 text-lg',
+  lg: 'min-h-16 px-6 py-3 text-xl',
 };
 
 const isDisabled = computed(() => props.disabled || props.loading);

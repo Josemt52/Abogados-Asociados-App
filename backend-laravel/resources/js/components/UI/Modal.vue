@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { X } from '@lucide/vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
@@ -31,6 +30,36 @@ const sizeClasses: Record<ModalSize, string> = {
 };
 
 const isVisible = computed(() => props.open || props.isOpen);
+const panel = ref<HTMLElement | null>(null);
+let previousFocus: HTMLElement | null = null;
+const focusable = () => Array.from(panel.value?.querySelectorAll<HTMLElement>(
+  'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+) || []);
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    emit('close');
+  }
+  if (event.key !== 'Tab') return;
+  const items = focusable();
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (!first) { event.preventDefault(); panel.value?.focus(); return; }
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.value)) {
+    event.preventDefault(); last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault(); first.focus();
+  }
+};
+watch(isVisible, async (visible) => {
+  if (visible) {
+    previousFocus = document.activeElement as HTMLElement | null;
+    await nextTick();
+    panel.value?.focus();
+  } else previousFocus?.focus();
+}, { immediate: true });
+onBeforeUnmount(() => previousFocus?.focus());
 </script>
 
 <template>
@@ -47,30 +76,34 @@ const isVisible = computed(() => props.open || props.isOpen);
           type="button"
           class="fixed inset-0 cursor-default bg-slate-950/60 backdrop-blur-[1px] transition-opacity"
           aria-label="Cerrar modal"
+          tabindex="-1"
           @click="emit('close')"
         />
 
         <div
+          ref="panel"
+          tabindex="-1"
+          @keydown="handleKeydown"
           :class="[
-            'relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl',
+            'relative max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded border-2 border-gray-700 bg-white shadow-xl',
             sizeClasses[props.size],
           ]"
         >
-          <div class="flex items-center justify-between gap-4 border-b border-blue-900 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-6 py-5 text-white">
-            <h3 class="text-xl font-bold tracking-tight">
+          <div class="flex items-center justify-between gap-4 border-b-2 border-gray-300 bg-gray-100 px-6 py-4 text-gray-950">
+            <h3 class="text-2xl font-bold">
               {{ props.title }}
             </h3>
             <button
               type="button"
-              class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-blue-300"
+              class="plain-button"
               aria-label="Cerrar"
               @click="emit('close')"
             >
-              <X class="h-6 w-6" />
+              Cerrar
             </button>
           </div>
 
-          <div class="bg-slate-50 p-6">
+          <div class="bg-white p-6">
             <slot />
           </div>
         </div>

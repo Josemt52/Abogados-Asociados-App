@@ -292,18 +292,18 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <main class="flex h-screen h-dvh flex-col overflow-hidden bg-slate-100" aria-label="Editor de resolución">
-        <header class="relative z-20 shrink-0 border-b border-blue-950 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white shadow-lg">
+    <main class="flex h-screen h-dvh flex-col overflow-hidden bg-gray-100" aria-label="Editor de resolución">
+        <header class="relative z-20 shrink-0 border-b border-gray-400 bg-white text-gray-950">
             <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-6">
                 <div class="min-w-0">
-                    <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-cyan-200">
+                    <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-gray-700">
                         <FilePenLine class="h-4 w-4" aria-hidden="true" />
-                        Paso 3 de 4 · Redactar resolución
+                        Actualizar expediente · Redactar resolución
                     </div>
                     <h1 class="mt-1 truncate text-xl font-bold sm:text-2xl">{{ documentName }}</h1>
                     <p
                         class="mt-2 inline-flex rounded-full px-3 py-1 text-sm font-bold"
-                        :class="isDirty ? 'bg-amber-300 text-amber-950' : 'bg-emerald-300 text-emerald-950'"
+                        :class="isDirty ? 'bg-gray-300 text-gray-950' : 'bg-gray-300 text-gray-950'"
                         aria-live="polite"
                     >
                         {{ isDirty ? 'Cambios sin guardar' : savedAtLabel }}
@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
                         @click="handleClose"
                     >
                         <template #icon><ArrowLeft class="h-5 w-5" /></template>
-                        Cerrar
+                        Volver al expediente
                     </Button>
                     <Button
                         variant="outline"
@@ -346,15 +346,15 @@ onBeforeUnmount(() => {
 
         <div v-if="loading" class="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-4">
             <div class="text-center" role="status" aria-live="polite">
-                <div class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-slate-300 border-t-blue-700" />
-                <p class="text-lg font-bold text-slate-800">Preparando la resolución...</p>
+                <div class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-gray-700" />
+                <p class="text-lg font-bold text-gray-800">Preparando la resolución...</p>
             </div>
         </div>
 
         <div v-else-if="loadError" class="min-h-0 flex-1 overflow-y-auto">
             <div class="mx-auto max-w-xl px-4 py-20 text-center">
-                <h2 class="text-xl font-bold text-slate-900">No se pudo abrir el editor</h2>
-                <p class="mt-3 text-slate-600">{{ loadError }}</p>
+                <h2 class="text-xl font-bold text-gray-900">No se pudo abrir el editor</h2>
+                <p class="mt-3 text-gray-600">{{ loadError }}</p>
                 <div class="mt-6 flex flex-wrap justify-center gap-3">
                     <Button variant="outline" size="lg" @click="handleClose">Volver al expediente</Button>
                     <Button variant="primary" size="lg" @click="loadEditor">Reintentar</Button>
@@ -368,12 +368,12 @@ onBeforeUnmount(() => {
             class="min-h-0 flex-1 overflow-y-auto"
         >
             <div class="mx-auto max-w-7xl p-4 sm:p-6">
-                <div class="mb-4 flex flex-col gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-blue-950 lg:flex-row lg:items-center lg:justify-between">
+                <div class="mb-4 flex flex-col gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-gray-950 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <p class="font-bold">Antes de terminar</p>
                         <p class="mt-1 text-sm">Revise la cabecera y el texto. Use <strong>Guardar</strong> si continuará más tarde; use <strong>Terminar e incorporar</strong> solo cuando esté listo.</p>
                     </div>
-                    <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-blue-800 shadow-sm">Resolución {{ payload.numero }}</span>
+                    <span class="shrink-0 rounded-full bg-white px-3 py-1 text-sm font-bold text-gray-800 shadow-sm">Resolución {{ payload.numero }}</span>
                 </div>
                 <RichTextEditor
                     v-model="content"
@@ -381,12 +381,12 @@ onBeforeUnmount(() => {
                     :aria-label="`Contenido de la resolución ${payload.numero}`"
                 >
                     <template #before-content>
-                        <div class="mb-8 font-[Arial] text-[12pt] text-slate-950">
-                            <div class="ml-auto w-full max-w-xl rounded-xl border-2 border-blue-100 bg-blue-50 p-5 shadow-sm" aria-label="Cabecera editable del expediente">
-                                <p class="mb-1 text-base font-bold text-blue-950">
+                        <div class="mb-8 font-[Arial] text-[12pt] text-gray-950">
+                            <div class="ml-auto w-full max-w-xl rounded-xl border-2 border-gray-100 bg-gray-50 p-5 shadow-sm" aria-label="Cabecera editable del expediente">
+                                <p class="mb-1 text-base font-bold text-gray-950">
                                     Datos que aparecerán en la cabecera
                                 </p>
-                                <p class="mb-4 text-sm text-blue-800">Complete o corrija únicamente los datos necesarios.</p>
+                                <p class="mb-4 text-sm text-gray-800">Complete o corrija únicamente los datos necesarios.</p>
                                 <div
                                     v-for="field in headerFields"
                                     :key="field.key"
@@ -404,10 +404,10 @@ onBeforeUnmount(() => {
                                         :maxlength="field.maxLength"
                                         :disabled="isBusy"
                                         autocomplete="off"
-                                        class="min-h-10 w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-1 font-[Arial] text-[12pt] uppercase text-slate-950 shadow-sm focus:border-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100"
+                                        class="min-h-10 w-full rounded-lg border-2 border-gray-300 bg-white px-3 py-1 font-[Arial] text-[12pt] uppercase text-gray-950 shadow-sm focus:border-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-100 disabled:bg-gray-100"
                                     />
                                 </div>
-                                <p class="mt-3 text-sm text-slate-600">
+                                <p class="mt-3 text-sm text-gray-600">
                                     Los campos vacíos no aparecerán en el documento generado.
                                 </p>
                             </div>
