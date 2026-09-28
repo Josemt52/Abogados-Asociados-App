@@ -11,8 +11,7 @@ const actions = [
 <template>
   <section class="simple-page menu-page">
     <header class="home-identity">
-      <h1>Abogadosyasociados</h1>
-      <p>Arias Carrazco</p>
+      <h1>Abogados y Asociados Arias Carrazco</h1>
     </header>
     <h2 class="menu-title">Menú principal</h2>
     <p>Seleccione lo que desea hacer.</p>

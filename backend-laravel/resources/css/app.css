@@ -7,7 +7,6 @@ body { margin: 0; min-width: 320px; background: #f5f5f5; color: #171717; font-fa
 ::selection { background: #d4d4d4; color: #171717; }
 :focus-visible { outline: 3px solid #171717; outline-offset: 4px; }
 .simple-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid #aaa; padding: 12px 32px; background: white; }
-.simple-brand { font-size: 22px; font-weight: 700; }
 .simple-header-actions { display: flex; align-items: center; gap: 16px; }
 .simple-content { padding: 28px 32px 48px; }
 .simple-page { max-width: 1100px; margin: 0 auto; }
@@ -17,7 +16,6 @@ body { margin: 0; min-width: 320px; background: #f5f5f5; color: #171717; font-fa
 .menu-page { max-width: 760px; }
 .home-identity { text-align: center; margin: 8px 0 32px; }
 .simple-page .home-identity h1 { font-size: clamp(34px, 4vw, 56px); line-height: 1.15; margin-bottom: 10px; }
-.simple-page .home-identity p { font-size: 28px; margin: 0; }
 .simple-page .menu-title { font-size: 27px; margin-bottom: 8px; }
 .simple-panel { margin-top: 24px; padding: 24px; background: white; border: 1px solid #aaa; }
 .main-menu { display: grid; gap: 12px; margin-top: 24px; }

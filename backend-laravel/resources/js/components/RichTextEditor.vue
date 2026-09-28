@@ -8,6 +8,11 @@ import { EditorContent, useEditor } from '@tiptap/vue-3';
 import {
     Bold,
     Italic,
+    List,
+    ListIndentDecrease,
+    ListIndentIncrease,
+    ListMinus,
+    ListOrdered,
     Redo2,
     TextAlignCenter,
     TextAlignEnd,
@@ -285,9 +290,16 @@ watch(
                 <Underline class="h-5 w-5" aria-hidden="true" />
             </button>
 
-            <button type="button" :class="controlClasses(activeItalic)" :disabled="isUnavailable"
-                :aria-pressed="activeItalic" title="Cursiva (Ctrl+I)" aria-label="Cursiva" @click="toggleItalic">
-                <Italic class="h-5 w-5" aria-hidden="true" /> Cursiva
+            <button
+                type="button"
+                :class="controlClasses(activeItalic)"
+                :disabled="isUnavailable"
+                :aria-pressed="activeItalic"
+                title="Cursiva (Ctrl+I)"
+                aria-label="Cursiva"
+                @click="toggleItalic"
+            >
+                <Italic class="h-5 w-5" aria-hidden="true" />
             </button>
             <label class="flex min-h-11 items-center gap-2 rounded-md border border-gray-300 bg-white px-3">
                 <span class="text-sm font-medium text-gray-700">Tamaño</span>
@@ -351,18 +363,60 @@ watch(
                 <TextAlignJustify class="h-5 w-5" aria-hidden="true" />
             </button>
             <div class="flex w-full flex-wrap gap-2 border-t border-gray-200 pt-3" role="group" aria-label="Listas y sangría">
-                <button type="button" :class="controlClasses(activeOrderedList)" :disabled="isUnavailable"
-                    :aria-pressed="activeOrderedList" aria-label="Lista numerada" @click="toggleOrderedList">1. Numeración</button>
-                <button type="button" :class="controlClasses(activeBulletList)" :disabled="isUnavailable"
-                    :aria-pressed="activeBulletList" aria-label="Lista con viñetas" @click="toggleBulletList('bullet')">• Viñetas</button>
-                <button type="button" :class="controlClasses(activeDashList)" :disabled="isUnavailable"
-                    :aria-pressed="activeDashList" aria-label="Lista con guiones" @click="toggleBulletList('dash')">– Guiones</button>
-                <button type="button" :class="controlClasses()" :disabled="isUnavailable || !canIndent"
-                    aria-label="Aumentar sangría de lista" @click="indent">→ Aumentar sangría</button>
-                <button type="button" :class="controlClasses()" :disabled="isUnavailable || !canOutdent"
-                    aria-label="Reducir sangría de lista" @click="outdent">← Reducir sangría</button>
+                <button
+                    type="button"
+                    :class="controlClasses(activeOrderedList)"
+                    :disabled="isUnavailable"
+                    :aria-pressed="activeOrderedList"
+                    title="Lista numerada"
+                    aria-label="Lista numerada"
+                    @click="toggleOrderedList"
+                >
+                    <ListOrdered class="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    :class="controlClasses(activeBulletList)"
+                    :disabled="isUnavailable"
+                    :aria-pressed="activeBulletList"
+                    title="Lista con viñetas"
+                    aria-label="Lista con viñetas"
+                    @click="toggleBulletList('bullet')"
+                >
+                    <List class="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    :class="controlClasses(activeDashList)"
+                    :disabled="isUnavailable"
+                    :aria-pressed="activeDashList"
+                    title="Lista con guiones"
+                    aria-label="Lista con guiones"
+                    @click="toggleBulletList('dash')"
+                >
+                    <ListMinus class="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    :class="controlClasses()"
+                    :disabled="isUnavailable || !canIndent"
+                    title="Aumentar sangría de lista"
+                    aria-label="Aumentar sangría de lista"
+                    @click="indent"
+                >
+                    <ListIndentIncrease class="h-5 w-5" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    :class="controlClasses()"
+                    :disabled="isUnavailable || !canOutdent"
+                    title="Reducir sangría de lista"
+                    aria-label="Reducir sangría de lista"
+                    @click="outdent"
+                >
+                    <ListIndentDecrease class="h-5 w-5" aria-hidden="true" />
+                </button>
             </div>
-            <p class="w-full text-sm text-gray-700">En una lista: Enter añade otro elemento; Enter en un elemento vacío termina la lista.</p>
         </div>
 
         <div class="overflow-x-auto p-3 sm:p-6">
