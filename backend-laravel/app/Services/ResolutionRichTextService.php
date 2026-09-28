@@ -17,7 +17,7 @@ use Throwable;
 
 class ResolutionRichTextService
 {
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
 
     /** @var list<int> */
     public const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24];
@@ -61,134 +61,175 @@ class ResolutionRichTextService
             $this->invalid('La estructura principal del documento no es válida.');
         }
 
-        $paragraphs = $document['content'] ?? [];
-
-        if (! is_array($paragraphs) || ! array_is_list($paragraphs)) {
-            $this->invalid('El contenido del documento debe ser una lista de párrafos.');
+        $blocks = $document['content'] ?? [];
+        if (! is_array($blocks) || ! array_is_list($blocks)) {
+            $this->invalid('El contenido debe ser una lista de párrafos o listas.');
         }
-
         $nodeCount = 1;
         $characterCount = 0;
-        $normalizedParagraphs = [];
+        $normalized = [];
+        foreach ($blocks as $block) {
+            $normalized[] = $this->normalizeBlock($block, $nodeCount, $characterCount);
+        }
+        return ['type' => 'doc', 'content' => $normalized ?: $this->emptyDocument()['content']];
+    }
 
-        foreach ($paragraphs as $paragraph) {
-            if (! is_array($paragraph)) {
-                $this->invalid('Uno de los párrafos no es válido.');
+    private function normalizeBlock(mixed $block, int &$nodeCount, int &$characterCount, int $depth = 0): array
+    {
+        $nodeCount++;
+        if (! is_array($block) || $nodeCount > self::MAX_NODES || $depth > 8
+            || array_diff(array_keys($block), ['type', 'attrs', 'content']) !== []) {
+            $this->invalid('El documento contiene demasiados elementos o una estructura no compatible.');
+        }
+        if (($block['type'] ?? null) === 'paragraph') {
+            return $this->normalizeParagraph($block, $nodeCount, $characterCount);
+        }
+        $type = $block['type'] ?? null;
+        if (! in_array($type, ['bulletList', 'orderedList'], true) || $depth >= 8) {
+            $this->invalid('El documento contiene un tipo de elemento no compatible o demasiados niveles de lista.');
+        }
+        $attrs = $block['attrs'] ?? [];
+        if (! is_array($attrs)) $this->invalid('La configuración de la lista no es válida.');
+        if ($type === 'orderedList') {
+            $start = $attrs['start'] ?? 1;
+            $style = $attrs['type'] ?? null;
+            if (array_diff(array_keys($attrs), ['start', 'type']) !== []
+                || ! is_int($start) || $start < 1 || $start > 999999
+                || ! in_array($style, [null, '1', 'a', 'A', 'i', 'I'], true)) {
+                $this->invalid('La numeración de la lista no es válida.');
+            }
+            $normalizedAttrs = ['start' => $start, 'type' => $style];
+        } else {
+            $marker = $attrs['marker'] ?? 'bullet';
+            if (array_diff(array_keys($attrs), ['marker']) !== []
+                || ! in_array($marker, ['bullet', 'dash'], true)) {
+                $this->invalid('La viñeta de la lista no es válida.');
+            }
+            $normalizedAttrs = ['marker' => $marker];
+        }
+        $items = $block['content'] ?? null;
+        if (! is_array($items) || ! array_is_list($items) || $items === []) {
+            $this->invalid('La lista debe contener al menos un elemento.');
+        }
+        $normalizedItems = [];
+        foreach ($items as $item) {
+            $nodeCount++;
+            if (! is_array($item) || $nodeCount > self::MAX_NODES
+                || ($item['type'] ?? null) !== 'listItem'
+                || array_diff(array_keys($item), ['type', 'content']) !== []) {
+                $this->invalid('Un elemento de lista no es válido.');
+            }
+            $children = $item['content'] ?? null;
+            if (! is_array($children) || ! array_is_list($children) || $children === []
+                || ($children[0]['type'] ?? null) !== 'paragraph') {
+                $this->invalid('Cada elemento de lista debe comenzar con un párrafo.');
+            }
+            $normalizedChildren = [];
+            foreach ($children as $child) {
+                $normalizedChildren[] = $this->normalizeBlock($child, $nodeCount, $characterCount, $depth + 1);
+            }
+            $normalizedItems[] = ['type' => 'listItem', 'content' => $normalizedChildren];
+        }
+        return ['type' => $type, 'attrs' => $normalizedAttrs, 'content' => $normalizedItems];
+    }
+
+    private function normalizeParagraph(array $paragraph, int &$nodeCount, int &$characterCount): array
+    {
+        $attrs = $paragraph['attrs'] ?? [];
+
+        if (! is_array($attrs) || array_diff(array_keys($attrs), ['textAlign']) !== []) {
+            $this->invalid('La configuración de un párrafo no es válida.');
+        }
+
+        $alignment = $attrs['textAlign'] ?? 'left';
+
+        if ($alignment === null) {
+            $alignment = 'left';
+        }
+
+        if (! in_array($alignment, ['left', 'center', 'right', 'justify'], true)) {
+            $this->invalid('La alineación seleccionada no es compatible.');
+        }
+
+        $children = $paragraph['content'] ?? [];
+
+        if (! is_array($children) || ! array_is_list($children)) {
+            $this->invalid('El contenido de un párrafo no es válido.');
+        }
+
+        $normalizedChildren = [];
+
+        foreach ($children as $child) {
+            if (! is_array($child)) {
+                $this->invalid('El documento contiene un elemento no válido.');
             }
 
             $nodeCount++;
 
-            if ($nodeCount > self::MAX_NODES
-                || ($paragraph['type'] ?? null) !== 'paragraph'
-                || array_diff(array_keys($paragraph), ['type', 'attrs', 'content']) !== []) {
-                $this->invalid('El documento contiene demasiados elementos o un párrafo no compatible.');
+            if ($nodeCount > self::MAX_NODES) {
+                $this->invalid('El documento contiene demasiados elementos.');
             }
 
-            $attrs = $paragraph['attrs'] ?? [];
+            if (($child['type'] ?? null) === 'hardBreak') {
+                if (array_diff(array_keys($child), ['type']) !== []) {
+                    $this->invalid('Un salto de línea contiene propiedades no compatibles.');
+                }
 
-            if (! is_array($attrs) || array_diff(array_keys($attrs), ['textAlign']) !== []) {
-                $this->invalid('La configuración de un párrafo no es válida.');
+                $normalizedChildren[] = ['type' => 'hardBreak'];
+
+                continue;
             }
 
-            $alignment = $attrs['textAlign'] ?? 'left';
-
-            if ($alignment === null) {
-                $alignment = 'left';
+            if (($child['type'] ?? null) !== 'text'
+                || array_diff(array_keys($child), ['type', 'text', 'marks']) !== []) {
+                $this->invalid('El documento contiene un tipo de elemento no compatible.');
             }
 
-            if (! in_array($alignment, ['left', 'center', 'right', 'justify'], true)) {
-                $this->invalid('La alineación seleccionada no es compatible.');
+            $text = $child['text'] ?? null;
+
+            if (! is_string($text) || ! mb_check_encoding($text, 'UTF-8')) {
+                $this->invalid('El documento contiene texto no válido.');
             }
 
-            $children = $paragraph['content'] ?? [];
+            $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? '';
+            $characterCount += mb_strlen($text, 'UTF-8');
 
-            if (! is_array($children) || ! array_is_list($children)) {
-                $this->invalid('El contenido de un párrafo no es válido.');
+            if ($characterCount > self::MAX_TEXT_CHARACTERS) {
+                $this->invalid('El documento supera la cantidad de texto permitida.');
             }
 
-            $normalizedChildren = [];
+            $marks = $this->normalizeMarks($child['marks'] ?? []);
+            $normalizedChild = ['type' => 'text', 'text' => $text];
 
-            foreach ($children as $child) {
-                if (! is_array($child)) {
-                    $this->invalid('El documento contiene un elemento no válido.');
-                }
-
-                $nodeCount++;
-
-                if ($nodeCount > self::MAX_NODES) {
-                    $this->invalid('El documento contiene demasiados elementos.');
-                }
-
-                if (($child['type'] ?? null) === 'hardBreak') {
-                    if (array_diff(array_keys($child), ['type']) !== []) {
-                        $this->invalid('Un salto de línea contiene propiedades no compatibles.');
-                    }
-
-                    $normalizedChildren[] = ['type' => 'hardBreak'];
-
-                    continue;
-                }
-
-                if (($child['type'] ?? null) !== 'text'
-                    || array_diff(array_keys($child), ['type', 'text', 'marks']) !== []) {
-                    $this->invalid('El documento contiene un tipo de elemento no compatible.');
-                }
-
-                $text = $child['text'] ?? null;
-
-                if (! is_string($text) || ! mb_check_encoding($text, 'UTF-8')) {
-                    $this->invalid('El documento contiene texto no válido.');
-                }
-
-                $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? '';
-                $characterCount += mb_strlen($text, 'UTF-8');
-
-                if ($characterCount > self::MAX_TEXT_CHARACTERS) {
-                    $this->invalid('El documento supera la cantidad de texto permitida.');
-                }
-
-                $marks = $this->normalizeMarks($child['marks'] ?? []);
-                $normalizedChild = ['type' => 'text', 'text' => $text];
-
-                if ($marks !== []) {
-                    $normalizedChild['marks'] = $marks;
-                }
-
-                $normalizedChildren[] = $normalizedChild;
+            if ($marks !== []) {
+                $normalizedChild['marks'] = $marks;
             }
 
-            $normalizedParagraph = [
-                'type' => 'paragraph',
-                'attrs' => ['textAlign' => $alignment],
-            ];
-
-            if ($normalizedChildren !== []) {
-                $normalizedParagraph['content'] = $normalizedChildren;
-            }
-
-            $normalizedParagraphs[] = $normalizedParagraph;
+            $normalizedChildren[] = $normalizedChild;
         }
 
-        if ($normalizedParagraphs === []) {
-            $normalizedParagraphs = $this->emptyDocument()['content'];
+        $normalizedParagraph = [
+            'type' => 'paragraph',
+            'attrs' => ['textAlign' => $alignment],
+        ];
+
+        if ($normalizedChildren !== []) {
+            $normalizedParagraph['content'] = $normalizedChildren;
         }
 
-        return ['type' => 'doc', 'content' => $normalizedParagraphs];
+
+        return $normalizedParagraph;
     }
 
     /** @param array<string, mixed> $document */
     public function hasMeaningfulContent(array $document): bool
     {
-        foreach ($document['content'] ?? [] as $paragraph) {
-            foreach (is_array($paragraph) ? ($paragraph['content'] ?? []) : [] as $child) {
-                if (is_array($child)
-                    && ($child['type'] ?? null) === 'text'
-                    && trim((string) ($child['text'] ?? '')) !== '') {
-                    return true;
-                }
-            }
+        if (($document['type'] ?? null) === 'text' && trim((string) ($document['text'] ?? '')) !== '') {
+            return true;
         }
-
+        foreach ($document['content'] ?? [] as $child) {
+            if (is_array($child) && $this->hasMeaningfulContent($child)) return true;
+        }
         return false;
     }
 
@@ -282,37 +323,8 @@ class ResolutionRichTextService
             ['spaceAfter' => 120]
         );
 
-        foreach ($document['content'] as $paragraph) {
-            $alignment = match ($paragraph['attrs']['textAlign'] ?? 'left') {
-                'center' => Jc::CENTER,
-                'right' => Jc::RIGHT,
-                'justify' => Jc::BOTH,
-                default => Jc::LEFT,
-            };
-            $run = $section->addTextRun([
-                'alignment' => $alignment,
-                'spaceAfter' => 120,
-                'lineHeight' => 1.15,
-            ]);
-            $children = $paragraph['content'] ?? [];
-
-            if ($children === []) {
-                $run->addText(' ', ['name' => 'Arial', 'size' => 12]);
-
-                continue;
-            }
-
-            foreach ($children as $child) {
-                if ($child['type'] === 'hardBreak') {
-                    $run->addTextBreak();
-
-                    continue;
-                }
-
-                $style = $this->fontStyle($child['marks'] ?? []);
-                $run->addText((string) $child['text'], $style);
-            }
-        }
+        $listIndex = 0;
+        $this->appendBlocks($phpWord, $section, $document['content'], $listIndex);
 
         $directory = storage_path('app/temp/rich-text');
         File::ensureDirectoryExists($directory, 0755, true);
@@ -342,6 +354,61 @@ class ResolutionRichTextService
         }
     }
 
+    private function appendBlocks(PhpWord $word, \PhpOffice\PhpWord\Element\Section $section, array $blocks, int &$listIndex, int $depth = 0): void
+    {
+        foreach ($blocks as $block) {
+            if ($block['type'] === 'paragraph') {
+                $this->appendParagraph($section, $block, $depth);
+                continue;
+            }
+            $styleName = 'resolution_list_'.(++$listIndex);
+            $ordered = $block['type'] === 'orderedList';
+            $format = $ordered ? match ($block['attrs']['type'] ?? null) {
+                'a' => 'lowerLetter', 'A' => 'upperLetter',
+                'i' => 'lowerRoman', 'I' => 'upperRoman',
+                default => 'decimal',
+            } : 'bullet';
+            $word->addNumberingStyle($styleName, [
+                'type' => 'singleLevel',
+                'levels' => [[
+                    'format' => $format,
+                    'text' => $ordered ? '%1.' : (($block['attrs']['marker'] ?? 'bullet') === 'dash' ? '–' : '•'),
+                    'start' => $block['attrs']['start'] ?? 1,
+                    'left' => ($depth + 1) * 360, 'hanging' => 240,
+                    'tabPos' => ($depth + 1) * 360, 'font' => 'Arial',
+                ]],
+            ]);
+            foreach ($block['content'] as $item) {
+                foreach ($item['content'] as $index => $child) {
+                    if ($child['type'] === 'paragraph') {
+                        $this->appendParagraph($section, $child, $depth + 1, $index === 0 ? $styleName : null);
+                    } else {
+                        $this->appendBlocks($word, $section, [$child], $listIndex, $depth + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    private function appendParagraph(\PhpOffice\PhpWord\Element\Section $section, array $paragraph, int $depth = 0, ?string $listStyle = null): void
+    {
+        $style = [
+            'alignment' => match ($paragraph['attrs']['textAlign'] ?? 'left') {
+                'center' => Jc::CENTER, 'right' => Jc::RIGHT,
+                'justify' => Jc::BOTH, default => Jc::LEFT,
+            },
+            'spaceAfter' => 120, 'lineHeight' => 1.15,
+        ];
+        if ($depth > 0 && $listStyle === null) $style['indentation'] = ['left' => $depth * 360];
+        $run = $listStyle !== null ? $section->addListItemRun(0, $listStyle, $style) : $section->addTextRun($style);
+        $children = $paragraph['content'] ?? [];
+        if ($children === []) $run->addText(' ', ['name' => 'Arial', 'size' => 12]);
+        foreach ($children as $child) {
+            if ($child['type'] === 'hardBreak') $run->addTextBreak();
+            else $run->addText((string) $child['text'], $this->fontStyle($child['marks'] ?? []));
+        }
+    }
+
     /**
      * @return list<array<string, mixed>>
      */
@@ -367,7 +434,7 @@ class ResolutionRichTextService
 
             $seen[$type] = true;
 
-            if (in_array($type, ['bold', 'underline'], true)) {
+            if (in_array($type, ['bold', 'underline', 'italic'], true)) {
                 if (array_diff(array_keys($mark), ['type', 'attrs']) !== []
                     || (isset($mark['attrs']) && $mark['attrs'] !== [] && $mark['attrs'] !== null)) {
                     $this->invalid('Un formato de texto contiene propiedades no compatibles.');
@@ -412,6 +479,8 @@ class ResolutionRichTextService
         foreach ($marks as $mark) {
             if ($mark['type'] === 'bold') {
                 $style['bold'] = true;
+            } elseif ($mark['type'] === 'italic') {
+                $style['italic'] = true;
             } elseif ($mark['type'] === 'underline') {
                 $style['underline'] = Font::UNDERLINE_SINGLE;
             } elseif ($mark['type'] === 'textStyle') {

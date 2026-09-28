@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 describe('RichTextEditor', () => {
-    it('muestra únicamente las herramientas básicas autorizadas', async () => {
+    it('muestra herramientas de formato, listas y sangría', async () => {
         wrapper = mount(RichTextEditor, {
             props: { modelValue: emptyDocument },
         });
@@ -48,10 +48,16 @@ describe('RichTextEditor', () => {
             'Rehacer',
             'Negrita',
             'Subrayado',
+            'Cursiva',
             'Alinear a la izquierda',
             'Centrar',
             'Alinear a la derecha',
             'Justificar',
+            'Lista numerada',
+            'Lista con viñetas',
+            'Lista con guiones',
+            'Aumentar sangría de lista',
+            'Reducir sangría de lista',
         ]);
         expect(wrapper.find('[aria-label="Insertar enlace"]').exists()).toBe(false);
         expect(wrapper.find('[aria-label="Insertar imagen"]').exists()).toBe(false);
@@ -74,5 +80,35 @@ describe('RichTextEditor', () => {
         const size = wrapper.get('select[aria-label="Tamaño de texto"]');
         await size.setValue('14pt');
         expect((size.element as HTMLSelectElement).value).toBe('14pt');
+    });
+    it('crea numeración, cambia a guiones y conserva su estructura al recargar', async () => {
+        wrapper = mount(RichTextEditor, { props: { modelValue: {
+            type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Primer punto' }] }],
+        } } });
+        await waitForEditor();
+        await wrapper.get('button[aria-label="Lista numerada"]').trigger('click');
+        expect(wrapper.find('[role="textbox"] ol li').exists()).toBe(true);
+        await wrapper.get('button[aria-label="Lista con guiones"]').trigger('click');
+        expect(wrapper.find('[role="textbox"] ul[data-marker="dash"] li').exists()).toBe(true);
+        const events = wrapper.emitted('update:modelValue')!;
+        const saved = events[events.length - 1][0] as Record<string, unknown>;
+        wrapper.unmount();
+        wrapper = mount(RichTextEditor, { props: { modelValue: saved } });
+        await waitForEditor();
+        expect(wrapper.get('[role="textbox"] ul').attributes('data-marker')).toBe('dash');
+        expect(wrapper.text()).toContain('Primer punto');
+        await wrapper.get('button[aria-label="Lista con viñetas"]').trigger('click');
+        expect(wrapper.get('[role="textbox"] ul').attributes('data-marker')).toBe('bullet');
+        await wrapper.get('button[aria-label="Lista con viñetas"]').trigger('click');
+        expect(wrapper.find('[role="textbox"] ul').exists()).toBe(false);
+    });
+    it('permite cursiva y desactiva los controles al guardar', async () => {
+        wrapper = mount(RichTextEditor, { props: { modelValue: emptyDocument } });
+        await waitForEditor();
+        await wrapper.get('button[aria-label="Cursiva"]').trigger('click');
+        expect(wrapper.get('button[aria-label="Cursiva"]').attributes('aria-pressed')).toBe('true');
+        await wrapper.setProps({ disabled: true });
+        expect(wrapper.get('button[aria-label="Lista numerada"]').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('button[aria-label="Cursiva"]').attributes('disabled')).toBeDefined();
     });
 });

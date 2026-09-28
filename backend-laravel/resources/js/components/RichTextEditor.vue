@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { Editor, JSONContent } from '@tiptap/core';
+import { Extension, type Editor, type JSONContent } from '@tiptap/core';
 import TextAlign from '@tiptap/extension-text-align';
 import { FontSize, TextStyle } from '@tiptap/extension-text-style';
 import StarterKit from '@tiptap/starter-kit';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
 import {
     Bold,
+    Italic,
     Redo2,
     TextAlignCenter,
     TextAlignEnd,
@@ -38,6 +39,12 @@ const emit = defineEmits<{
 const fontSizes = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24];
 const activeBold = ref(false);
 const activeUnderline = ref(false);
+const activeItalic = ref(false);
+const activeOrderedList = ref(false);
+const activeBulletList = ref(false);
+const activeDashList = ref(false);
+const canIndent = ref(false);
+const canOutdent = ref(false);
 const activeAlignment = ref<TextAlignment>('left');
 const selectedFontSize = ref('12pt');
 const canUndo = ref(false);
@@ -46,6 +53,18 @@ const canRedo = ref(false);
 const syncToolbarState = (instance: Editor): void => {
     activeBold.value = instance.isActive('bold');
     activeUnderline.value = instance.isActive('underline');
+    activeItalic.value = instance.isActive('italic');
+    activeOrderedList.value = instance.isActive('orderedList');
+    const marker = instance.getAttributes('bulletList').marker;
+    activeBulletList.value = instance.isActive('bulletList') && marker !== 'dash';
+    activeDashList.value = instance.isActive('bulletList') && marker === 'dash';
+    const position = instance.state.selection.$from;
+    let listDepth = 0;
+    for (let depth = 0; depth <= position.depth; depth++) {
+        if (['bulletList', 'orderedList'].includes(position.node(depth).type.name)) listDepth++;
+    }
+    canIndent.value = listDepth < 8 && instance.can().sinkListItem('listItem');
+    canOutdent.value = instance.can().liftListItem('listItem');
     canUndo.value = instance.can().undo();
     canRedo.value = instance.can().redo();
 
@@ -59,26 +78,40 @@ const syncToolbarState = (instance: Editor): void => {
         ) ?? 'left';
 };
 
+const ListMarker = Extension.create({
+    name: 'listMarker',
+    addGlobalAttributes() {
+        return [{
+            types: ['bulletList'],
+            attributes: {
+                marker: {
+                    default: 'bullet',
+                    parseHTML: element => element.getAttribute('data-marker') === 'dash' ? 'dash' : 'bullet',
+                    renderHTML: attributes => ({ 'data-marker': attributes.marker }),
+                },
+            },
+        }];
+    },
+});
+
 const editor = useEditor({
     content: props.modelValue,
     editable: !props.disabled,
     extensions: [
         StarterKit.configure({
             blockquote: false,
-            bulletList: false,
+            bulletList: { keepMarks: true },
             code: false,
             codeBlock: false,
             heading: false,
             horizontalRule: false,
-            italic: false,
             link: false,
-            listItem: false,
-            listKeymap: false,
-            orderedList: false,
+            orderedList: { keepMarks: true },
             strike: false,
             trailingNode: false,
         }),
         TextStyle,
+        ListMarker,
         FontSize,
         TextAlign.configure({
             types: ['paragraph'],
@@ -127,6 +160,22 @@ const toggleUnderline = (): void =>
         instance.chain().focus().toggleUnderline().run();
     });
 
+const toggleItalic = () => runCommand(instance => { instance.chain().focus().toggleItalic().run(); });
+const toggleOrderedList = () => runCommand(instance => { instance.chain().focus().toggleOrderedList().run(); });
+const toggleBulletList = (marker: 'bullet' | 'dash') => runCommand(instance => {
+    if (instance.isActive('bulletList') && instance.getAttributes('bulletList').marker !== marker) {
+        instance.chain().focus().updateAttributes('bulletList', { marker }).run();
+    } else if (instance.isActive('bulletList')) {
+        instance.chain().focus().toggleBulletList().run();
+    } else {
+        instance.chain().focus().toggleBulletList().updateAttributes('bulletList', { marker }).run();
+    }
+});
+const indent = () => runCommand(instance => {
+    if (canIndent.value) instance.chain().focus().sinkListItem('listItem').run();
+});
+const outdent = () => runCommand(instance => { instance.chain().focus().liftListItem('listItem').run(); });
+
 const undo = (): void =>
     runCommand((instance) => {
         instance.chain().focus().undo().run();
@@ -156,7 +205,7 @@ const handleFontSizeChange = (event: Event): void => {
 };
 
 const controlClasses = (active = false): string[] => [
-    'inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
+    'inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-md border px-3 py-2 text-base font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40',
     active
         ? 'border-gray-800 bg-gray-800 text-white'
         : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-100',
@@ -236,6 +285,10 @@ watch(
                 <Underline class="h-5 w-5" aria-hidden="true" />
             </button>
 
+            <button type="button" :class="controlClasses(activeItalic)" :disabled="isUnavailable"
+                :aria-pressed="activeItalic" title="Cursiva (Ctrl+I)" aria-label="Cursiva" @click="toggleItalic">
+                <Italic class="h-5 w-5" aria-hidden="true" /> Cursiva
+            </button>
             <label class="flex min-h-11 items-center gap-2 rounded-md border border-gray-300 bg-white px-3">
                 <span class="text-sm font-medium text-gray-700">Tamaño</span>
                 <select
@@ -297,6 +350,19 @@ watch(
             >
                 <TextAlignJustify class="h-5 w-5" aria-hidden="true" />
             </button>
+            <div class="flex w-full flex-wrap gap-2 border-t border-gray-200 pt-3" role="group" aria-label="Listas y sangría">
+                <button type="button" :class="controlClasses(activeOrderedList)" :disabled="isUnavailable"
+                    :aria-pressed="activeOrderedList" aria-label="Lista numerada" @click="toggleOrderedList">1. Numeración</button>
+                <button type="button" :class="controlClasses(activeBulletList)" :disabled="isUnavailable"
+                    :aria-pressed="activeBulletList" aria-label="Lista con viñetas" @click="toggleBulletList('bullet')">• Viñetas</button>
+                <button type="button" :class="controlClasses(activeDashList)" :disabled="isUnavailable"
+                    :aria-pressed="activeDashList" aria-label="Lista con guiones" @click="toggleBulletList('dash')">– Guiones</button>
+                <button type="button" :class="controlClasses()" :disabled="isUnavailable || !canIndent"
+                    aria-label="Aumentar sangría de lista" @click="indent">→ Aumentar sangría</button>
+                <button type="button" :class="controlClasses()" :disabled="isUnavailable || !canOutdent"
+                    aria-label="Reducir sangría de lista" @click="outdent">← Reducir sangría</button>
+            </div>
+            <p class="w-full text-sm text-gray-700">En una lista: Enter añade otro elemento; Enter en un elemento vacío termina la lista.</p>
         </div>
 
         <div class="overflow-x-auto p-3 sm:p-6">
@@ -327,6 +393,19 @@ watch(
 :deep(.legal-editor-content p:last-child) {
     margin-bottom: 0;
 }
+
+:deep(.legal-editor-content ul), :deep(.legal-editor-content ol) {
+    padding-left: 1.5em;
+    margin: 0 0 0.65rem;
+}
+:deep(.legal-editor-content ul) { list-style-type: disc; }
+:deep(.legal-editor-content ol) { list-style-type: decimal; }
+:deep(.legal-editor-content ol[type="a"]) { list-style-type: lower-alpha; }
+:deep(.legal-editor-content ol[type="A"]) { list-style-type: upper-alpha; }
+:deep(.legal-editor-content ol[type="i"]) { list-style-type: lower-roman; }
+:deep(.legal-editor-content ol[type="I"]) { list-style-type: upper-roman; }
+:deep(.legal-editor-content ul[data-marker="dash"] > li::marker) { content: "–  "; }
+:deep(.legal-editor-content li > p) { margin-bottom: 0.25rem; }
 
 :deep(.legal-editor-content.ProseMirror-focused) {
     outline: none;

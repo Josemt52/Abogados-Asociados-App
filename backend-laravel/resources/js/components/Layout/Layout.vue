@@ -11,7 +11,6 @@ const { user, logout, isAuthenticated } = useAuth();
 watch(isAuthenticated, (authenticated) => {
   if (!authenticated) void router.replace('/login');
 });
-const appName = import.meta.env.VITE_APP_NAME || 'Abogados Asociados';
 
 const handleLogout = async () => {
   try { await authAPI.logout(); }
@@ -28,7 +27,6 @@ const handleLogout = async () => {
     <header class="simple-header">
       <div class="flex items-center gap-5">
         <BackButton />
-        <span class="simple-brand">{{ appName }}</span>
       </div>
       <div class="simple-header-actions">
         <span>{{ user?.username }}</span>
